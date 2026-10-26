@@ -122,10 +122,22 @@ tbody tr:hover { background: var(--surface-2); }
 .empty { color: var(--muted); text-align: center; padding: 22px 10px; }
 .pre { white-space: pre-wrap; word-break: break-word; }
 td.aliases { min-width: 12rem; }
+/* The description links to the transaction and stretches over the whole row;
+   the checkbox and delete button sit above that link. */
+table.tx tbody tr { position: relative; }
+.tx-open { color: inherit; font-weight: 600; }
+.tx-open::after { content: ""; position: absolute; inset: 0; }
+.tx-open:hover { text-decoration: none; }
+.tx-open:focus-visible { outline: none; }
+.tx-open:focus-visible::after { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 6px; }
+table.tx tbody tr:has(.tx-open) { cursor: pointer; }
+.tx-select, .tx-actions form { position: relative; z-index: 1; }
 .tx-select { width: 1%; padding-right: 2px; }
 .tx-select input { width: 17px; height: 17px; margin: 2px 0 0; cursor: pointer; }
-.tx-actions { white-space: nowrap; text-align: right; }
-.tx-actions .tx-delete { margin-left: 10px; }
+.tx-actions { width: 1%; white-space: nowrap; text-align: right; padding-top: 6px; padding-bottom: 6px; }
+.icon-button { border: 0; background: none; padding: 6px; border-radius: 8px; color: var(--muted); line-height: 0; }
+.icon-button:hover { background: var(--surface-2); }
+.icon-button.danger:hover, .icon-button.danger:focus-visible { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
 tr.deleted td:not(.tx-actions) { opacity: .5; text-decoration: line-through; }
 tr:has(.tx-select input:checked) { background: color-mix(in srgb, var(--danger) 8%, transparent); }
 .bulk-bar { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; padding-bottom: 12px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
@@ -296,7 +308,6 @@ textarea { resize: vertical; }
   table.tx td.empty { flex: 1; padding: 22px 10px; }
   .tx-select { order: 0; position: relative; z-index: 1; width: auto; padding: 0; }
   .tx-desc { order: 1; flex: 1 1 0; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
-  .tx-desc:empty::before { content: "Без опису"; color: var(--muted); font-weight: 500; }
   .tx-desc .muted { font-weight: 400; }
   .tx-amount { order: 2; font-weight: 700; }
   table.tx tr::after { content: ""; order: 3; flex-basis: 100%; height: 0; }
@@ -304,12 +315,9 @@ textarea { resize: vertical; }
   .tx-cat { order: 5; }
   .tx-owner { order: 6; }
   .tx-source { order: 7; }
-  .tx-date::after, .tx-cat::after, .tx-owner::after { content: "·"; margin-left: 8px; }
+  .tx-cat::before, .tx-owner::before, .tx-source::before { content: "·"; margin-right: 8px; }
   .tx-source .badge { background: none; padding: 0; color: inherit; font: inherit; }
-  /* The whole row opens the transaction; checkbox and delete sit above that link. */
-  .tx-actions { order: 8; margin-left: auto; font-size: .84rem; }
-  .tx-actions .tx-open { position: absolute; inset: 0; font-size: 0; }
-  .tx-actions .tx-delete { position: relative; z-index: 1; margin-left: 0; }
+  .tx-actions { order: 8; width: auto; margin: -6px -4px -6px auto; padding: 0; }
 }
 
 @media (max-width: 520px) {
