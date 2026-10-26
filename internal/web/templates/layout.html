@@ -4,6 +4,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#fffdf9" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1c1f1b" media="(prefers-color-scheme: dark)">
   <title>{{.Title}} · Skarb</title>
   <link rel="stylesheet" href="/static/app.css">
   <script src="/static/app.js" defer></script>
@@ -13,14 +15,14 @@
   <div class="container topbar-inner">
     <a class="brand" href="/">Skarb<span>·</span></a>
     {{if .User}}
-    <nav class="nav">
+    <nav class="nav" aria-label="Розділи">
       <a href="/" class="{{if eq .Path "/"}}active{{end}}">Огляд</a>
-      <a href="/transactions" class="{{if eq .Path "/transactions"}}active{{end}}">Транзакції</a>
+      <a href="/transactions" class="{{if hasPrefix .Path "/transactions"}}active{{end}}">Транзакції</a>
       <a href="/stats" class="{{if eq .Path "/stats"}}active{{end}}">Статистика</a>
       <a href="/snapshots" class="{{if eq .Path "/snapshots"}}active{{end}}">Заощадження</a>
       {{if .IsAdmin}}
-      <a href="/admin/categories" class="{{if eq .Path "/admin/categories"}}active{{end}}">Категорії</a>
-      <a href="/admin/users" class="{{if eq .Path "/admin/users"}}active{{end}}">Користувачі</a>
+      <a href="/admin/categories" class="{{if hasPrefix .Path "/admin/categories"}}active{{end}}">Категорії</a>
+      <a href="/admin/users" class="{{if hasPrefix .Path "/admin/users"}}active{{end}}">Користувачі</a>
       <a href="/admin/settings" class="{{if eq .Path "/admin/settings"}}active{{end}}">Налаштування</a>
       <a href="/admin/audit" class="{{if eq .Path "/admin/audit"}}active{{end}}">Журнал</a>
       {{end}}

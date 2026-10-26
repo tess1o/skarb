@@ -15,7 +15,7 @@
   <div class="card stat">
     <span class="label">Доходи</span>
     <strong class="value income">{{fmtAmount .Summary.IncomeUAH "UAH"}}</strong>
-    <span class="muted small">{{len .Summary.ByCurrency}} валют · {{.Summary.Count}} операцій</span>
+    <span class="muted small">{{$n := len .Summary.ByCurrency}}{{$n}} {{plural $n "валюта" "валюти" "валют"}} · {{.Summary.Count}} {{plural .Summary.Count "операція" "операції" "операцій"}}</span>
   </div>
   <div class="card stat">
     <span class="label">Витрати</span>
@@ -72,9 +72,9 @@
   <section class="card">
     <div class="card-head"><h2>Останні транзакції</h2><a href="/transactions">Усі</a></div>
     <div class="table-wrap">
-      <table class="compact">
+      <table class="compact tx">
         <thead><tr><th>Дата</th><th>Категорія</th><th>Хто</th><th>Опис</th><th class="num">Сума</th><th>Джерело</th><th></th></tr></thead>
-        <tbody>{{template "txRows" .Recent}}</tbody>
+        <tbody>{{template "txRows" (dict "Rows" .Recent "CSRF" $.CSRF "Next" $.RequestURI)}}</tbody>
       </table>
     </div>
   </section>

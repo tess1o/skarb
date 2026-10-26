@@ -266,6 +266,64 @@ func (s *Service) DeleteTransaction(ctx context.Context, actor domain.Actor, uid
 	return err
 }
 
+// MaxBulkDelete caps how many transactions one DeleteTransactions call may touch.
+const MaxBulkDelete = 200
+
+// DeleteTransactions soft-deletes several transactions in one database
+// transaction: either all of them are deleted or none are. Rows that are
+// already deleted are skipped, so a stale page can be resubmitted safely.
+// It returns the number of rows actually deleted.
+func (s *Service) DeleteTransactions(ctx context.Context, actor domain.Actor, uids []string, reason string) (int, error) {
+	if err := s.RequireAuth(actor); err != nil {
+		return 0, err
+	}
+	reason = strings.TrimSpace(reason)
+	if len([]rune(reason)) > 200 {
+		return 0, validation("reason", "reason is too long")
+	}
+	seen := map[string]bool{}
+	var unique []string
+	for _, uid := range uids {
+		uid = strings.TrimSpace(uid)
+		if uid != "" && !seen[uid] {
+			seen[uid] = true
+			unique = append(unique, uid)
+		}
+	}
+	if len(unique) == 0 {
+		return 0, validation("uids", "no transactions selected")
+	}
+	if len(unique) > MaxBulkDelete {
+		return 0, validation("uids", fmt.Sprintf("at most %d transactions at once", MaxBulkDelete))
+	}
+	var targets []*domain.Transaction
+	for _, uid := range unique {
+		tx, err := s.Store.GetTransactionByUID(ctx, uid)
+		if err != nil {
+			return 0, err
+		}
+		if !tx.Deleted() {
+			targets = append(targets, tx)
+		}
+	}
+	err := s.withTx(ctx, func(sqlTx *sql.Tx) error {
+		for _, tx := range targets {
+			if err := s.Store.SoftDeleteTransaction(ctx, sqlTx, tx.ID, actor.UserID, reason); err != nil {
+				return err
+			}
+			if err := s.audit(ctx, sqlTx, actor, "transaction.deleted", "transaction", tx.UID,
+				safeTransaction(tx), map[string]any{"reason": reason, "bulk": true}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return len(targets), nil
+}
+
 // EditTransactionNote implements the Telegram comment flow: the old row is
 // soft-deleted and a replacement row with the new note is linked to it.
 func (s *Service) EditTransactionNote(ctx context.Context, actor domain.Actor, uid, note string) (*domain.Transaction, error) {

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/rand"
@@ -104,6 +105,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /transactions/{uid}/edit", s.requireAuth(http.HandlerFunc(s.transactionEditPage)))
 	mux.Handle("POST /transactions/{uid}/edit", s.requireAuth(http.HandlerFunc(s.transactionUpdate)))
 	mux.Handle("POST /transactions/{uid}/delete", s.requireAuth(http.HandlerFunc(s.transactionDelete)))
+	mux.Handle("POST /transactions/delete", s.requireAuth(http.HandlerFunc(s.transactionsBulkDelete)))
 	mux.Handle("GET /transactions/export.csv", s.requireAuth(http.HandlerFunc(s.transactionsCSV)))
 
 	mux.Handle("GET /stats", s.requireAuth(http.HandlerFunc(s.statsPage)))
@@ -170,6 +172,7 @@ type ctxKey int
 const (
 	userCtx ctxKey = iota
 	sessionCtx
+	requestIDCtx
 )
 
 func currentUser(ctx context.Context) *domain.User {
@@ -273,10 +276,11 @@ func (s *Server) baseData(w http.ResponseWriter, r *http.Request) map[string]any
 	u := currentUser(r.Context())
 	sess := currentSession(r.Context())
 	data := map[string]any{
-		"Path":  r.URL.Path,
-		"Year":  time.Now().Year(),
-		"User":  u,
-		"Flash": s.getFlash(w, r),
+		"Path":       r.URL.Path,
+		"RequestURI": r.URL.RequestURI(),
+		"Year":       time.Now().Year(),
+		"User":       u,
+		"Flash":      s.getFlash(w, r),
 	}
 	if u != nil {
 		data["IsAdmin"] = u.IsAdmin()
@@ -288,6 +292,13 @@ func (s *Server) baseData(w http.ResponseWriter, r *http.Request) map[string]any
 }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, page string, data map[string]any) {
+	s.renderStatus(w, r, http.StatusOK, page, data)
+}
+
+// renderStatus executes the page into a buffer first, so a template error yields
+// a clean 500 instead of a half-written page, and so headers set while building
+// the data (e.g. clearing the flash cookie) are sent before the status line.
+func (s *Server) renderStatus(w http.ResponseWriter, r *http.Request, status int, page string, data map[string]any) {
 	base := s.baseData(w, r)
 	for k, v := range base {
 		if _, exists := data[k]; !exists {
@@ -299,16 +310,19 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, page string, dat
 		http.Error(w, "template not found", http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := t.ExecuteTemplate(w, "layout", data); err != nil {
+	var buf bytes.Buffer
+	if err := t.ExecuteTemplate(&buf, "layout", data); err != nil {
 		s.log.Error("render template", "page", page, "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
 	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = buf.WriteTo(w)
 }
 
 func (s *Server) renderError(w http.ResponseWriter, r *http.Request, status int, message string) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(status)
-	s.render(w, r, "error.html", map[string]any{"Title": "Помилка", "Message": message, "Status": status})
+	s.renderStatus(w, r, status, "error.html", map[string]any{"Title": "Помилка", "Message": message, "Status": status})
 }
 
 func (s *Server) redirect(w http.ResponseWriter, r *http.Request, path string) {
@@ -475,13 +489,18 @@ func (w *statusWriter) WriteHeader(code int) {
 func (s *Server) requestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		raw := make([]byte, 8)
+		_, _ = rand.Read(raw)
+		reqID := hex.EncodeToString(raw)
+		w.Header().Set("X-Request-ID", reqID)
+		r = r.WithContext(context.WithValue(r.Context(), requestIDCtx, reqID))
 		sw := &statusWriter{ResponseWriter: w, status: 200}
 		next.ServeHTTP(sw, r)
 		if skipAccessLog(r, sw.status) {
 			return
 		}
 		s.log.Info("http", "method", r.Method, "path", r.URL.Path, "status", sw.status,
-			"duration", time.Since(start).Round(time.Millisecond), "ip", s.clientIP(r))
+			"duration", time.Since(start).Round(time.Millisecond), "ip", s.clientIP(r), "request_id", reqID)
 	})
 }
 
@@ -505,7 +524,7 @@ func skipAccessLog(r *http.Request, status int) bool {
 }
 
 func requestIDFrom(ctx context.Context) string {
-	v, _ := ctx.Value(ctxKey(100)).(string)
+	v, _ := ctx.Value(requestIDCtx).(string)
 	return v
 }
 
@@ -605,7 +624,23 @@ func (s *Server) templateFuncs() template.FuncMap {
 			}
 			return v
 		},
-		"urlquery": template.URLQueryEscaper,
+		"urlquery":  template.URLQueryEscaper,
+		"hasPrefix": strings.HasPrefix,
+		// dict builds a map from key/value pairs so partials can take several arguments.
+		"dict": func(kv ...any) (map[string]any, error) {
+			if len(kv)%2 != 0 {
+				return nil, fmt.Errorf("dict: odd number of arguments")
+			}
+			m := make(map[string]any, len(kv)/2)
+			for i := 0; i < len(kv); i += 2 {
+				k, ok := kv[i].(string)
+				if !ok {
+					return nil, fmt.Errorf("dict: key %v is not a string", kv[i])
+				}
+				m[k] = kv[i+1]
+			}
+			return m, nil
+		},
 	}
 }
 

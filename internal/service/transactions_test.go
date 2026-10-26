@@ -175,3 +175,54 @@ func TestTransactionEditAndUndoVersioning(t *testing.T) {
 		t.Fatalf("latest = %s, want %s", latest.UID, original.UID)
 	}
 }
+
+func TestDeleteTransactionsBulk(t *testing.T) {
+	ctx := context.Background()
+	svc, actor, cleanup := setupService(t)
+	defer cleanup()
+	today := svc.Today()
+
+	food, err := svc.Store.ResolveCategory(ctx, "Їжа", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var uids []string
+	for _, desc := range []string{"a", "b", "c"} {
+		tx, err := svc.CreateTransaction(ctx, actor, service.TransactionItemInput{
+			Amount: "10", Currency: "UAH", Date: today.String(), Category: food.UID, Description: desc,
+		}, domain.SourceWeb, desc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		uids = append(uids, tx.UID)
+	}
+
+	// An unknown UID fails the whole batch and deletes nothing.
+	if _, err := svc.DeleteTransactions(ctx, actor, []string{uids[0], "missing"}, "bulk"); err == nil {
+		t.Fatal("expected error for unknown uid")
+	}
+	if tx, _ := svc.GetTransaction(ctx, actor, uids[0]); tx.Deleted() {
+		t.Fatal("batch with an unknown uid must not delete anything")
+	}
+
+	if err := svc.DeleteTransaction(ctx, actor, uids[2], "single"); err != nil {
+		t.Fatal(err)
+	}
+	// Duplicates are ignored and the already-deleted row is skipped.
+	n, err := svc.DeleteTransactions(ctx, actor, []string{uids[0], uids[1], uids[1], uids[2]}, "bulk")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 2 {
+		t.Fatalf("deleted = %d, want 2", n)
+	}
+	for _, uid := range uids {
+		if tx, _ := svc.GetTransaction(ctx, actor, uid); !tx.Deleted() {
+			t.Fatalf("%s should be deleted", uid)
+		}
+	}
+
+	if _, err := svc.DeleteTransactions(ctx, actor, nil, ""); err == nil {
+		t.Fatal("expected error for empty selection")
+	}
+}

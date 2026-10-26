@@ -23,7 +23,7 @@
 </form>
 
 <div class="grid three">
-  <div class="card stat"><span class="label">Доходи</span><strong class="value income">{{fmtAmount .Summary.IncomeUAH "UAH"}}</strong><span class="muted small">{{.Summary.Count}} операцій</span></div>
+  <div class="card stat"><span class="label">Доходи</span><strong class="value income">{{fmtAmount .Summary.IncomeUAH "UAH"}}</strong><span class="muted small">{{.Summary.Count}} {{plural .Summary.Count "операція" "операції" "операцій"}}</span></div>
   <div class="card stat"><span class="label">Витрати</span><strong class="value expense">{{fmtAmount .Summary.ExpenseUAH "UAH"}}</strong><span class="muted small">{{if .Summary.MissingRate}}без курсу: {{.Summary.MissingRate}}{{else}}конвертовано в UAH{{end}}</span></div>
   <div class="card stat"><span class="label">Баланс</span><strong class="value {{if lt .Summary.NetUAH 0}}expense{{else}}income{{end}}">{{fmtAmount .Summary.NetUAH "UAH"}}</strong><span class="muted small">за обраний період</span></div>
 </div>

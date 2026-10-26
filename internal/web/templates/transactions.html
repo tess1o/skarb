@@ -44,10 +44,20 @@
 </form>
 
 <div class="card">
+  {{if .Transactions}}
+  <form id="tx-bulk" method="post" action="/transactions/delete" class="bulk-bar" data-confirm="Видалити вибрані транзакції?">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <input type="hidden" name="reason" value="web bulk delete">
+    <input type="hidden" name="next" value="{{.RequestURI}}">
+    <label class="check"><input type="checkbox" data-select-all> Вибрати всі на сторінці</label>
+    <span class="muted small" data-selected-count></span>
+    <button class="danger small" type="submit" data-bulk-submit>Видалити вибрані</button>
+  </form>
+  {{end}}
   <div class="table-wrap">
-    <table>
-      <thead><tr><th>Дата</th><th>Категорія</th><th>Хто</th><th>Опис</th><th class="num">Сума</th><th>Джерело</th><th></th></tr></thead>
-      <tbody>{{template "txRows" .Transactions}}</tbody>
+    <table class="tx">
+      <thead><tr><th class="tx-select"></th><th>Дата</th><th>Категорія</th><th>Хто</th><th>Опис</th><th class="num">Сума</th><th>Джерело</th><th></th></tr></thead>
+      <tbody>{{template "txRows" (dict "Rows" .Transactions "CSRF" .CSRF "Next" .RequestURI "Select" true)}}</tbody>
     </table>
   </div>
   {{if gt .Pages 1}}

@@ -1,15 +1,26 @@
+{{/* txRows expects a dict: Rows, CSRF, Next (return URL after delete), Select (show checkboxes). */}}
 {{define "txRows"}}
-{{range .}}
-<tr>
-  <td class="nowrap">{{fmtDate .OccurredOn}}</td>
-  <td><span class="cat-dot" style="background:{{.CategoryColor}}"></span>{{.CategoryEmoji}} {{.CategoryName}}</td>
-  <td>{{.OwnerName}}</td>
-  <td>{{.Description}}{{if .Note}}<div class="muted small">{{.Note}}</div>{{end}}</td>
-  <td class="num {{if eq (printf "%s" .Kind) "income"}}income{{else}}expense{{end}}">{{fmtAmount .AmountMinor .Currency}}</td>
-  <td><span class="badge">{{sourceLabel .Source}}</span></td>
-  <td><a href="/transactions/{{.UID}}">Деталі</a></td>
+{{range .Rows}}
+<tr{{if .Deleted}} class="deleted"{{end}}>
+  {{if $.Select}}<td class="tx-select">{{if not .Deleted}}<input type="checkbox" name="uid" value="{{.UID}}" form="tx-bulk" aria-label="Вибрати транзакцію">{{end}}</td>{{end}}
+  <td class="tx-date nowrap">{{fmtDate .OccurredOn}}</td>
+  <td class="tx-cat"><span class="cat-dot" style="background:{{.CategoryColor}}"></span>{{.CategoryEmoji}} {{.CategoryName}}</td>
+  <td class="tx-owner">{{.OwnerName}}</td>
+  <td class="tx-desc">{{.Description}}{{if .Note}}<div class="muted small">{{.Note}}</div>{{end}}</td>
+  <td class="tx-amount num {{if eq (printf "%s" .Kind) "income"}}income{{else}}expense{{end}}">{{fmtAmount .AmountMinor .Currency}}</td>
+  <td class="tx-source"><span class="badge">{{sourceLabel .Source}}</span></td>
+  <td class="tx-actions">
+    <a class="tx-open" href="/transactions/{{.UID}}">Деталі</a>
+    {{if .Deleted}}<span class="badge danger">видалено</span>{{else}}
+    <form method="post" action="/transactions/{{.UID}}/delete" class="inline tx-delete" data-confirm="Видалити транзакцію «{{default .Description .CategoryName}}» на {{fmtAmount .AmountMinor .Currency}}?">
+      <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+      <input type="hidden" name="reason" value="web delete">
+      <input type="hidden" name="next" value="{{$.Next}}">
+      <button class="link danger" type="submit">Видалити</button>
+    </form>{{end}}
+  </td>
 </tr>
 {{else}}
-<tr><td colspan="7" class="empty">Немає транзакцій.</td></tr>
+<tr><td colspan="{{if $.Select}}8{{else}}7{{end}}" class="empty">Немає транзакцій.</td></tr>
 {{end}}
 {{end}}

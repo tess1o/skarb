@@ -28,6 +28,15 @@ func (s *Server) transactionsPage(w http.ResponseWriter, r *http.Request) {
 	categories, _ := s.svc.ListCategories(r.Context(), actor, false)
 	users, _ := s.svc.ListUsers(r.Context(), actor, false)
 	pages := (total + 49) / 50
+	if pages > 0 && page > pages {
+		// E.g. after deleting every row on the last page: show the new last page.
+		page = pages
+		f.Offset = (page - 1) * 50
+		if rows, total, err = s.svc.ListTransactions(r.Context(), actor, f); err != nil {
+			s.renderError(w, r, http.StatusInternalServerError, "Не вдалося завантажити транзакції: "+err.Error())
+			return
+		}
+	}
 	s.render(w, r, "transactions.html", map[string]any{
 		"Title":        "Транзакції",
 		"Transactions": rows,
@@ -199,7 +208,32 @@ func (s *Server) transactionDelete(w http.ResponseWriter, r *http.Request) {
 	} else {
 		s.setFlash(w, "success", "Транзакцію видалено.")
 	}
-	s.redirect(w, r, "/transactions")
+	s.redirect(w, r, nextOr(r, "/transactions"))
+}
+
+func (s *Server) transactionsBulkDelete(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		s.renderError(w, r, http.StatusBadRequest, "Некоректна форма.")
+		return
+	}
+	n, err := s.svc.DeleteTransactions(r.Context(), s.actor(r), r.PostForm["uid"], r.PostFormValue("reason"))
+	switch {
+	case err != nil:
+		s.setFlash(w, "error", "Не вдалося видалити транзакції: "+err.Error())
+	case n == 0:
+		s.setFlash(w, "warning", "Вибрані транзакції вже видалено.")
+	default:
+		s.setFlash(w, "success", fmt.Sprintf("Видалено %d %s.", n, pluralUK(n, "транзакцію", "транзакції", "транзакцій")))
+	}
+	s.redirect(w, r, nextOr(r, "/transactions"))
+}
+
+// nextOr returns the form's local "next" path, or fallback when it is unset or unsafe.
+func nextOr(r *http.Request, fallback string) string {
+	if next := safeNext(r.FormValue("next")); next != "" {
+		return next
+	}
+	return fallback
 }
 
 func (s *Server) transactionDetailPage(w http.ResponseWriter, r *http.Request) {

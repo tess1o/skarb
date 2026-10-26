@@ -25,7 +25,7 @@
       <tr>
         <td><span class="cat-dot" style="background:{{.Color}}"></span>{{.Emoji}} {{.Name}}</td>
         <td>{{kindLabel .Kind}}</td>
-        <td class="small muted">{{range .Aliases}}{{.}} · {{end}}</td>
+        <td class="small muted aliases">{{range $i, $a := .Aliases}}{{if $i}} · {{end}}{{$a}}{{end}}</td>
         <td>{{.SortOrder}}</td>
         <td>{{if .Archived}}<span class="badge danger">архів</span>{{else}}<span class="badge success">активна</span>{{end}}</td>
         <td class="actions-cell">
