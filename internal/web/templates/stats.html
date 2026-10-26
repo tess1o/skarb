@@ -1,0 +1,93 @@
+{{define "content"}}
+<div class="page-head">
+  <div><h1>Статистика</h1><p class="muted">{{fmtDate .From}} — {{fmtDate .To}}</p></div>
+  <a class="button" href="/stats/export.csv?from={{.FromValue}}&to={{.ToValue}}&kind={{.Kind}}">CSV</a>
+</div>
+
+<form class="card filters" method="get" action="/stats">
+  <label>Від<input type="date" name="from" value="{{.FromValue}}"></label>
+  <label>До<input type="date" name="to" value="{{.ToValue}}"></label>
+  <label>Тип
+    <select name="kind">
+      <option value="expense" {{if eq (printf "%s" .Kind) "expense"}}selected{{end}}>Витрати</option>
+      <option value="income" {{if eq (printf "%s" .Kind) "income"}}selected{{end}}>Доходи</option>
+    </select>
+  </label>
+  <label>Користувач
+    <select name="user">
+      <option value="">Усі</option>
+      {{range .AllUsers}}<option value="{{.UID}}" {{if eq $.UserFilter .UID}}selected{{end}}>{{.DisplayName}}</option>{{end}}
+    </select>
+  </label>
+  <button type="submit">Показати</button>
+</form>
+
+<div class="grid three">
+  <div class="card stat"><span class="label">Доходи</span><strong class="value income">{{fmtAmount .Summary.IncomeUAH "UAH"}}</strong><span class="muted small">{{.Summary.Count}} операцій</span></div>
+  <div class="card stat"><span class="label">Витрати</span><strong class="value expense">{{fmtAmount .Summary.ExpenseUAH "UAH"}}</strong><span class="muted small">{{if .Summary.MissingRate}}без курсу: {{.Summary.MissingRate}}{{else}}конвертовано в UAH{{end}}</span></div>
+  <div class="card stat"><span class="label">Баланс</span><strong class="value {{if lt .Summary.NetUAH 0}}expense{{else}}income{{end}}">{{fmtAmount .Summary.NetUAH "UAH"}}</strong><span class="muted small">за обраний період</span></div>
+</div>
+
+{{$total := .Summary.ExpenseUAH}}{{if eq (printf "%s" .Kind) "income"}}{{$total = .Summary.IncomeUAH}}{{end}}
+<div class="grid two">
+  <section class="card">
+    <div class="card-head"><h2>За категоріями</h2><span class="muted small">{{kindLabel .Kind}}</span></div>
+    {{range .Categories}}
+    <div class="bar-row">
+      <div class="bar-label"><span class="cat-dot" style="background:{{.Color}}"></span>{{.Emoji}} {{.Name}}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:{{barPct .AmountUAH $total}}%;background:{{.Color}}"></div></div>
+      <div class="bar-value">{{fmtAmount .AmountUAH "UAH"}} <span class="muted small">{{fmtPct .Percent}}%</span></div>
+    </div>
+    {{else}}<p class="empty">Немає даних за період.</p>{{end}}
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>За користувачами</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Користувач</th><th class="num">Доходи</th><th class="num">Витрати</th><th class="num">Баланс</th></tr></thead>
+        <tbody>
+        {{range .Users}}
+          <tr><td>{{.DisplayName}}</td><td class="num income">{{fmtAmount .IncomeUAH "UAH"}}</td><td class="num expense">{{fmtAmount .ExpenseUAH "UAH"}}</td><td class="num">{{fmtAmount .NetUAH "UAH"}}</td></tr>
+        {{else}}<tr><td colspan="4" class="empty">Немає даних.</td></tr>{{end}}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+{{with .Comparison}}
+<section class="card">
+  <div class="card-head"><h2>Порівняння з попереднім періодом</h2></div>
+  <div class="grid three">
+    <div class="stat"><span class="label">Доходи: зміна</span><strong class="value {{if lt .IncomeDelta 0}}expense{{else}}income{{end}}">{{fmtAmount .IncomeDelta "UAH"}}</strong><span class="muted small">було {{fmtAmount .B.IncomeUAH "UAH"}}</span></div>
+    <div class="stat"><span class="label">Витрати: зміна</span><strong class="value {{if gt .ExpenseDelta 0}}expense{{else}}income{{end}}">{{fmtAmount .ExpenseDelta "UAH"}}</strong><span class="muted small">було {{fmtAmount .B.ExpenseUAH "UAH"}}</span></div>
+    <div class="stat"><span class="label">Баланс: зміна</span><strong class="value {{if lt .NetDelta 0}}expense{{else}}income{{end}}">{{fmtAmount .NetDelta "UAH"}}</strong><span class="muted small">було {{fmtAmount .B.NetUAH "UAH"}}</span></div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Категорія</th><th>Тип</th><th class="num">Зараз</th><th class="num">Раніше</th><th class="num">Зміна</th></tr></thead>
+      <tbody>
+      {{range .ByCategory}}
+        <tr><td>{{.Name}}</td><td>{{kindLabel .Kind}}</td><td class="num">{{fmtAmount .AUAH "UAH"}}</td><td class="num">{{fmtAmount .BUAH "UAH"}}</td><td class="num {{if lt .Delta 0}}income{{else}}expense{{end}}">{{fmtAmount .Delta "UAH"}}</td></tr>
+      {{else}}<tr><td colspan="5" class="empty">Немає даних для порівняння.</td></tr>{{end}}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{end}}
+
+<section class="card">
+  <div class="card-head"><h2>Динаміка</h2><span class="muted small">{{if eq .Granularity "month"}}по місяцях{{else}}по днях{{end}}</span></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Період</th><th class="num">Доходи</th><th class="num">Витрати</th><th class="num">Різниця</th></tr></thead>
+      <tbody>
+      {{range .Trend}}
+        <tr><td>{{.Label}}</td><td class="num income">{{fmtAmount .IncomeUAH "UAH"}}</td><td class="num expense">{{fmtAmount .ExpenseUAH "UAH"}}</td><td class="num">{{fmtAmount (sub .IncomeUAH .ExpenseUAH) "UAH"}}</td></tr>
+      {{else}}<tr><td colspan="4" class="empty">Немає даних.</td></tr>{{end}}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{end}}

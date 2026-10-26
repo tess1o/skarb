@@ -1,0 +1,135 @@
+{{define "content"}}
+<div class="page-head"><div><h1>Налаштування</h1><p class="muted">ШІ, Telegram, нагадування, курси та MCP.</p></div><a class="button" href="/admin/audit">Журнал дій</a></div>
+
+<section class="card">
+  <div class="card-head"><h2>ШІ-парсер</h2><span>{{if .LLMConfigured}}<span class="badge success">підключено</span>{{else}}<span class="badge">не налаштовано</span>{{end}} {{if .LLMKeySet}}<span class="badge success">ключ є</span>{{else}}<span class="badge danger">немає ключа</span>{{end}}</span></div>
+  <p class="muted small">Сумісний з OpenAI endpoint. Ключ задається лише через <code>SKARB_LLM_API_KEY</code>. Без ШІ працює детермінований парсер. У приватному чаті або за @згадкою/reply бот може виконувати MCP-інструменти; результати форматує Go.</p>
+  <form method="post" action="/admin/settings/llm" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <label class="span2">Base URL<input name="base_url" value="{{.LLM.BaseURL}}" placeholder="https://api.openai.com/v1"></label>
+    <label>Модель<input name="model" value="{{.LLM.Model}}" placeholder="gpt-4o-mini"></label>
+    <label>Режим JSON<select name="schema_mode">
+      <option value="auto" {{if eq .LLM.SchemaMode "auto"}}selected{{end}}>auto</option>
+      <option value="json_schema" {{if eq .LLM.SchemaMode "json_schema"}}selected{{end}}>json_schema</option>
+      <option value="json_object" {{if eq .LLM.SchemaMode "json_object"}}selected{{end}}>json_object</option>
+      <option value="prompt" {{if eq .LLM.SchemaMode "prompt"}}selected{{end}}>prompt only</option>
+    </select></label>
+    <label>Таймаут, с<input type="number" name="timeout_seconds" value="{{.LLM.TimeoutSeconds}}" min="5" max="120"></label>
+    <label>Макс. токенів<input type="number" name="max_output_tokens" value="{{.LLM.MaxOutputTokens}}" min="100" max="4000"></label>
+    <label>Макс. транзакцій<input type="number" name="max_transactions" value="{{.LLM.MaxTransactions}}" min="1" max="20"></label>
+    <label>Макс. символів<input type="number" name="max_input_chars" value="{{.LLM.MaxInputChars}}" min="100" max="10000"></label>
+    <label>Температура<input name="temperature" value="{{.LLM.Temperature}}" inputmode="decimal"></label>
+    <div class="form-actions span2">
+      <button class="primary" type="submit">Зберегти ШІ</button>
+      <span class="muted small">Збережіть налаштування, потім перевірте з'єднання.</span>
+    </div>
+  </form>
+  <form method="post" action="/admin/settings/llm/test" class="inline" style="margin-top:10px">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <button class="button small" type="submit">Перевірити ШІ</button>
+  </form>
+</section>
+
+<section class="card">
+  <div class="card-head"><h2>Telegram</h2><span class="muted small">Бот працює через long polling</span></div>
+  <p class="muted small">Вимкніть Group Privacy у BotFather, перезапустіть бота в групі, надішліть <code>/id</code> і додайте chat ID сюди. Користувачів прив'язуйте на сторінці «Користувачі».</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Chat ID</th><th>Назва</th><th>Тип</th><th>Додано</th><th></th></tr></thead>
+      <tbody>
+      {{range .Chats}}
+        <tr><td>{{.ChatID}}</td><td>{{.Title}}</td><td>{{.ChatType}}</td><td>{{fmtDateTime .CreatedAt}}</td>
+        <td><form method="post" action="/admin/settings/telegram/remove" class="inline"><input type="hidden" name="csrf_token" value="{{$.CSRF}}"><input type="hidden" name="chat_id" value="{{.ChatID}}"><button class="link danger" type="submit">видалити</button></form></td></tr>
+      {{else}}<tr><td colspan="5" class="empty">Дозволених чатів немає.</td></tr>{{end}}
+      </tbody>
+    </table>
+  </div>
+  <form method="post" action="/admin/settings/telegram/add" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <label>Chat ID<input name="chat_id" inputmode="numeric" placeholder="-1001234567890" required></label>
+    <label>Назва<input name="title" placeholder="Сімейний бюджет"></label>
+    <label>Тип<select name="chat_type"><option value="group">group</option><option value="supergroup">supergroup</option></select></label>
+    <div class="form-actions"><button class="primary" type="submit">Додати чат</button></div>
+  </form>
+</section>
+
+<section class="card">
+  <div class="card-head"><h2>Нагадування</h2><span class="muted small">Рівно два cron-розклади</span></div>
+  {{range .Reminders}}
+  {{$r := .}}
+  <form method="post" action="/admin/settings/reminders/{{.Kind}}" class="form-grid subcard">
+    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+    <div class="span2"><strong>{{if eq .Kind "transactions"}}Транзакції{{else}}Заощадження{{end}}</strong> <span class="muted small">({{.Kind}})</span></div>
+    <label>Cron<input name="cron_expr" value="{{.CronExpr}}" required></label>
+    <label>Вікно, днів<input type="number" name="window_days" value="{{.WindowDays}}" min="1" max="365"></label>
+    <label>Часовий пояс<input name="timezone" value="{{.Timezone}}"></label>
+    <label class="check"><input type="checkbox" name="enabled" value="1" {{if .Enabled}}checked{{end}}> увімкнено</label>
+    <label>Цільовий чат
+      <select name="target_chat_id">
+        <option value="">— адмін DM —</option>
+        {{range $.Chats}}<option value="{{.ChatID}}" {{if eq .ChatID (derefInt64 $r.TargetChatID)}}selected{{end}}>{{.Title}} ({{.ChatID}})</option>{{end}}
+      </select>
+    </label>
+    <label>Цільовий користувач
+      <select name="target_user_id">
+        <option value="">—</option>
+        {{range $.Users}}<option value="{{.ID}}" {{if eq .ID (derefInt64 $r.TargetUserID)}}selected{{end}}>{{.DisplayName}}</option>{{end}}
+      </select>
+    </label>
+    <div class="form-actions span2">
+      <button class="primary" type="submit">Зберегти</button>
+      <button class="button small" type="submit" formaction="/admin/settings/reminders/{{.Kind}}/test" formnovalidate>Тест</button>
+      <span class="muted small">Останній запуск: {{fmtTimePtr .LastRunAt}} · Надіслано: {{fmtTimePtr .LastSentAt}}</span>
+    </div>
+  </form>
+  {{end}}
+</section>
+
+<section class="card">
+  <div class="card-head"><h2>Курси NBU</h2><form method="post" action="/admin/settings/fx/refresh" class="inline"><input type="hidden" name="csrf_token" value="{{.CSRF}}"><button class="button small" type="submit">Оновити зараз</button></form></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Валюта</th><th class="num">UAH за 1</th><th>Дата</th><th>Джерело</th><th>Оновлено</th></tr></thead>
+      <tbody>
+      {{range .Rates}}<tr><td>{{.Currency}}</td><td class="num">{{fmtRate .RateScaled}}</td><td>{{fmtDate .RateDate}}</td><td>{{.Source}}</td><td>{{fmtDateTime .FetchedAt}}</td></tr>
+      {{else}}<tr><td colspan="5" class="empty">Курсів ще немає.</td></tr>{{end}}
+      </tbody>
+    </table>
+  </div>
+  <form method="post" action="/admin/settings/fx/override" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <label>Валюта<select name="currency">{{range .Currencies}}<option value="{{.}}">{{.}}</option>{{end}}</select></label>
+    <label>Дата<input type="date" name="date" value="{{.Today}}" required></label>
+    <label>Курс UAH за 1<input name="rate" inputmode="decimal" placeholder="45,051" required></label>
+    <div class="form-actions"><button class="button" type="submit">Зберегти ручний курс</button></div>
+  </form>
+</section>
+
+<section class="card">
+  <div class="card-head"><h2>MCP-токени</h2><span class="muted small">HTTP endpoint: {{.PublicBaseURL}}/mcp</span></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Користувач</th><th>Назва</th><th>Префікс</th><th>Створено</th><th>Останнє використання</th><th></th></tr></thead>
+      <tbody>
+      {{range .Tokens}}
+        <tr><td>{{.User.DisplayName}}</td><td>{{.Name}}</td><td><code>{{.TokenPrefix}}…{{.Last4}}</code></td><td>{{fmtDateTime .CreatedAt}}</td><td>{{fmtTimePtr .LastUsedAt}}</td>
+        <td>{{if .RevokedAt}}<span class="badge danger">відкликано</span>{{else}}<form method="post" action="/admin/settings/tokens/{{.UID}}/revoke" class="inline"><input type="hidden" name="csrf_token" value="{{$.CSRF}}"><button class="link danger" type="submit">відкликати</button></form>{{end}}</td></tr>
+      {{else}}<tr><td colspan="6" class="empty">Токенів немає.</td></tr>{{end}}
+      </tbody>
+    </table>
+  </div>
+  <form method="post" action="/admin/settings/tokens" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <label>Користувач<select name="user">{{range .Users}}<option value="{{.UID}}">{{.DisplayName}}</option>{{end}}</select></label>
+    <label>Назва токена<input name="name" placeholder="Claude Desktop" required></label>
+    <div class="form-actions"><button class="primary" type="submit">Створити токен</button></div>
+  </form>
+  <p class="muted small">Токен показується один раз. Для Claude Desktop використовуйте <code>skarb mcp-stdio --url {{.PublicBaseURL}}/mcp</code> і змінну <code>SKARB_MCP_TOKEN</code>.</p>
+</section>
+
+<section class="card">
+  <h2>Резервні копії</h2>
+  <p class="muted small">Скачайте консистентну копію SQLite. Зберігайте її в захищеному місці.</p>
+  <a class="button" href="/admin/backup">Завантажити резервну копію</a>
+</section>
+{{end}}

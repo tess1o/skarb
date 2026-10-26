@@ -1,0 +1,54 @@
+{{define "content"}}
+<div class="page-head"><div><h1>Користувачі</h1><p class="muted">Реєстрація вимкнена. Лише адміністратор створює та деактивує користувачів.</p></div></div>
+
+<section class="card">
+  <h2>Новий користувач</h2>
+  <form method="post" action="/admin/users" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <label>Логін<input name="username" required placeholder="wife"></label>
+    <label>Ім'я<input name="display_name" required placeholder="Дружина"></label>
+    <label>Тимчасовий пароль<input name="password" placeholder="залиште порожнім для генерації"></label>
+    <label>Telegram user_id<input name="telegram_id" inputmode="numeric" placeholder="123456789"></label>
+    <div class="form-actions span2"><button class="primary" type="submit">Створити</button></div>
+  </form>
+</section>
+
+<section class="card">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Логін</th><th>Ім'я</th><th>Роль</th><th>Telegram</th><th>Стан</th><th></th></tr></thead>
+      <tbody>
+      {{range .Users}}
+      <tr>
+        <td>{{.Username}}</td>
+        <td>{{.DisplayName}}</td>
+        <td>{{roleLabel .Role}}</td>
+        <td>{{if .TelegramUserID}}{{derefInt64 .TelegramUserID}}{{else}}<span class="muted">не прив'язано</span>{{end}}</td>
+        <td>{{if .IsActive}}<span class="badge success">активний</span>{{else}}<span class="badge danger">вимкнений</span>{{end}}</td>
+        <td class="actions-cell">
+          <a class="button small" href="/admin/users/{{.UID}}/edit">Редагувати</a>
+          <form method="post" action="/admin/users/{{.UID}}/reset" class="inline" data-confirm="Згенерувати новий пароль?">
+            <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+            <button class="button small" type="submit">Скинути пароль</button>
+          </form>
+          {{if not .IsAdmin}}
+          <form method="post" action="/admin/users/{{.UID}}/active" class="inline">
+            <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+            <input type="hidden" name="active" value="{{if .IsActive}}0{{else}}1{{end}}">
+            <button class="button small" type="submit">{{if .IsActive}}Деактивувати{{else}}Активувати{{end}}</button>
+          </form>
+          {{if .IsActive}}
+          <form method="post" action="/admin/users/{{.UID}}/delete" class="inline" data-confirm="Видалити користувача? Історія транзакцій збережеться.">
+            <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+            <button class="link danger" type="submit">Видалити</button>
+          </form>
+          {{end}}
+          {{end}}
+        </td>
+      </tr>
+      {{else}}<tr><td colspan="6" class="empty">Користувачів немає.</td></tr>{{end}}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{end}}

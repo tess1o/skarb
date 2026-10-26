@@ -1,0 +1,58 @@
+{{define "content"}}
+<div class="page-head"><div><h1>Категорії</h1><p class="muted">Лише адміністратор може створювати, редагувати й видаляти категорії.</p></div></div>
+
+<section class="card">
+  <h2>Нова категорія</h2>
+  <form method="post" action="/admin/categories" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <label>Назва<input name="name" required placeholder="Наприклад, Подорожі"></label>
+    <label>Тип<select name="kind"><option value="expense">Витрата</option><option value="income">Дохід</option></select></label>
+    <label>Колір<input name="color" value="#64748b" pattern="#[0-9a-fA-F]{6}"></label>
+    <label>Емодзі<input name="emoji" placeholder="✈️"></label>
+    <label>Порядок<input type="number" name="sort" value="0"></label>
+    <label class="span2">Аліаси (по одному на рядок або через кому)<textarea name="aliases" rows="2" placeholder="подорожі, travel, відпустка"></textarea></label>
+    <div class="form-actions span2"><button class="primary" type="submit">Створити</button></div>
+  </form>
+</section>
+
+<section class="card">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Категорія</th><th>Тип</th><th>Аліаси</th><th>Порядок</th><th>Стан</th><th></th></tr></thead>
+      <tbody>
+      {{range .Categories}}
+      {{$cat := .}}
+      <tr>
+        <td><span class="cat-dot" style="background:{{.Color}}"></span>{{.Emoji}} {{.Name}}</td>
+        <td>{{kindLabel .Kind}}</td>
+        <td class="small muted">{{range .Aliases}}{{.}} · {{end}}</td>
+        <td>{{.SortOrder}}</td>
+        <td>{{if .Archived}}<span class="badge danger">архів</span>{{else}}<span class="badge success">активна</span>{{end}}</td>
+        <td class="actions-cell">
+          <a class="button small" href="/admin/categories/{{.UID}}/edit">Редагувати</a>
+          <form method="post" action="/admin/categories/{{.UID}}/archive" class="inline">
+            <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+            <input type="hidden" name="archived" value="{{if .Archived}}0{{else}}1{{end}}">
+            <button class="button small" type="submit">{{if .Archived}}Відновити{{else}}Архів{{end}}</button>
+          </form>
+          <details class="inline-details">
+            <summary class="link danger">Видалити</summary>
+            <form method="post" action="/admin/categories/{{.UID}}/delete" class="inline-form">
+              <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+              <select name="reassign_to">
+                <option value="">— без перенесення —</option>
+                {{range $.Categories}}{{if ne .UID $cat.UID}}<option value="{{.UID}}">{{.Emoji}} {{.Name}} ({{kindLabel .Kind}})</option>{{end}}{{end}}
+              </select>
+              <button class="danger small" type="submit">Видалити</button>
+            </form>
+          </details>
+        </td>
+      </tr>
+      {{else}}
+      <tr><td colspan="6" class="empty">Категорій немає.</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{end}}

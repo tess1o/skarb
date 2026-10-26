@@ -1,0 +1,32 @@
+{{define "content"}}
+<div class="page-head"><div><h1>Журнал дій</h1><p class="muted">Останні 200 подій</p></div><a class="button" href="/admin/settings">← Налаштування</a></div>
+
+<form class="card filters" method="get" action="/admin/audit">
+  <label>Дія<input name="action" value="{{.Filter.action}}" placeholder="transaction.created"></label>
+  <label>Тип об'єкта<input name="entity_type" value="{{.Filter.entity_type}}" placeholder="transaction"></label>
+  <label>UID об'єкта<input name="entity_uid" value="{{.Filter.entity_uid}}"></label>
+  <label>Актор<select name="actor"><option value="">Усі</option>{{range .Users}}<option value="{{.UID}}" {{if eq $.Filter.actor .UID}}selected{{end}}>{{.DisplayName}}</option>{{end}}</select></label>
+  <label>Від<input type="date" name="from" value="{{.Filter.from}}"></label>
+  <label>До<input type="date" name="to" value="{{.Filter.to}}"></label>
+  <button type="submit">Фільтрувати</button>
+</form>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Час</th><th>Актор</th><th>Дія</th><th>Об'єкт</th><th>Деталі</th></tr></thead>
+      <tbody>
+      {{range .Rows}}
+        <tr>
+          <td class="nowrap">{{fmtDateTime .CreatedAt}}</td>
+          <td>{{default .ActorName "система"}} <span class="muted small">{{sourceLabel .ActorKind}}</span></td>
+          <td><code>{{.Action}}</code></td>
+          <td>{{.EntityType}}{{if .EntityUID}} <span class="muted small">{{.EntityUID}}</span>{{end}}</td>
+          <td>{{if or .BeforeJSON .AfterJSON}}<details><summary>JSON</summary>{{if .BeforeJSON}}<pre>before: {{.BeforeJSON}}</pre>{{end}}{{if .AfterJSON}}<pre>after: {{.AfterJSON}}</pre>{{end}}</details>{{else}}<span class="muted">—</span>{{end}}</td>
+        </tr>
+      {{else}}<tr><td colspan="5" class="empty">Подій немає.</td></tr>{{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{end}}

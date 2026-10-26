@@ -1,0 +1,15 @@
+{{define "txRows"}}
+{{range .}}
+<tr>
+  <td class="nowrap">{{fmtDate .OccurredOn}}</td>
+  <td><span class="cat-dot" style="background:{{.CategoryColor}}"></span>{{.CategoryEmoji}} {{.CategoryName}}</td>
+  <td>{{.OwnerName}}</td>
+  <td>{{.Description}}{{if .Note}}<div class="muted small">{{.Note}}</div>{{end}}</td>
+  <td class="num {{if eq (printf "%s" .Kind) "income"}}income{{else}}expense{{end}}">{{fmtAmount .AmountMinor .Currency}}</td>
+  <td><span class="badge">{{sourceLabel .Source}}</span></td>
+  <td><a href="/transactions/{{.UID}}">Деталі</a></td>
+</tr>
+{{else}}
+<tr><td colspan="7" class="empty">Немає транзакцій.</td></tr>
+{{end}}
+{{end}}

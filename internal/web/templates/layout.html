@@ -1,0 +1,47 @@
+{{define "layout"}}
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}} · Skarb</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="container topbar-inner">
+    <a class="brand" href="/">Skarb<span>·</span></a>
+    {{if .User}}
+    <nav class="nav">
+      <a href="/" class="{{if eq .Path "/"}}active{{end}}">Огляд</a>
+      <a href="/transactions" class="{{if eq .Path "/transactions"}}active{{end}}">Транзакції</a>
+      <a href="/stats" class="{{if eq .Path "/stats"}}active{{end}}">Статистика</a>
+      <a href="/snapshots" class="{{if eq .Path "/snapshots"}}active{{end}}">Заощадження</a>
+      {{if .IsAdmin}}
+      <a href="/admin/categories" class="{{if eq .Path "/admin/categories"}}active{{end}}">Категорії</a>
+      <a href="/admin/users" class="{{if eq .Path "/admin/users"}}active{{end}}">Користувачі</a>
+      <a href="/admin/settings" class="{{if eq .Path "/admin/settings"}}active{{end}}">Налаштування</a>
+      <a href="/admin/audit" class="{{if eq .Path "/admin/audit"}}active{{end}}">Журнал</a>
+      {{end}}
+    </nav>
+    <div class="account">
+      <a href="/settings" class="account-name">{{.User.DisplayName}}</a>
+      <form method="post" action="/logout" class="inline">
+        <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+        <button class="link" type="submit">Вийти</button>
+      </form>
+    </div>
+    {{end}}
+  </div>
+</header>
+<main class="container">
+  {{with .Flash}}
+  <div class="flash {{.Kind}}" role="status">{{.Message}}</div>
+  {{end}}
+  {{template "content" .}}
+</main>
+<footer class="container footer">Skarb · сімейний бюджет · {{.Year}}</footer>
+</body>
+</html>
+{{end}}

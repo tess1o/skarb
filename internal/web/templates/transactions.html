@@ -1,0 +1,61 @@
+{{define "content"}}
+<div class="page-head">
+  <div><h1>Транзакції</h1><p class="muted">Знайдено: {{.Total}}</p></div>
+  <div class="actions">
+    <a class="button" href="/transactions/export.csv?{{.BaseQuery}}">CSV</a>
+    <a class="button primary" href="/transactions/new">+ Транзакція</a>
+  </div>
+</div>
+
+<form class="card filters" method="get" action="/transactions">
+  <label>Від<input type="date" name="from" value="{{.Filter.from}}"></label>
+  <label>До<input type="date" name="to" value="{{.Filter.to}}"></label>
+  <label>Користувач
+    <select name="user">
+      <option value="">Усі</option>
+      {{range .Users}}<option value="{{.UID}}" {{if eq $.Filter.user .UID}}selected{{end}}>{{.DisplayName}}</option>{{end}}
+    </select>
+  </label>
+  <label>Категорія
+    <select name="category">
+      <option value="">Усі</option>
+      {{range .Categories}}<option value="{{.UID}}" {{if eq $.Filter.category .UID}}selected{{end}}>{{.Emoji}} {{.Name}}</option>{{end}}
+    </select>
+  </label>
+  <label>Тип
+    <select name="kind">
+      <option value="">Усі</option>
+      <option value="expense" {{if eq .Filter.kind "expense"}}selected{{end}}>Витрати</option>
+      <option value="income" {{if eq .Filter.kind "income"}}selected{{end}}>Доходи</option>
+    </select>
+  </label>
+  <label>Джерело
+    <select name="source">
+      <option value="">Усі</option>
+      <option value="web" {{if eq .Filter.source "web"}}selected{{end}}>Веб</option>
+      <option value="telegram" {{if eq .Filter.source "telegram"}}selected{{end}}>Telegram</option>
+      <option value="mcp" {{if eq .Filter.source "mcp"}}selected{{end}}>MCP</option>
+    </select>
+  </label>
+  <label>Пошук<input name="q" value="{{.Filter.q}}" placeholder="опис, нотатка…"></label>
+  {{if .IsAdmin}}<label class="check"><input type="checkbox" name="deleted" value="1" {{if eq .Filter.deleted "1"}}checked{{end}}> показати видалені</label>{{end}}
+  <button type="submit">Фільтрувати</button>
+  <a class="button" href="/transactions">Скинути</a>
+</form>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Дата</th><th>Категорія</th><th>Хто</th><th>Опис</th><th class="num">Сума</th><th>Джерело</th><th></th></tr></thead>
+      <tbody>{{template "txRows" .Transactions}}</tbody>
+    </table>
+  </div>
+  {{if gt .Pages 1}}
+  <div class="pagination">
+    {{if gt .Page 1}}<a class="button" href="?{{.BaseQuery}}&page={{.PrevPage}}">← Назад</a>{{end}}
+    <span>Сторінка {{.Page}} з {{.Pages}}</span>
+    {{if lt .Page .Pages}}<a class="button" href="?{{.BaseQuery}}&page={{.NextPage}}">Далі →</a>{{end}}
+  </div>
+  {{end}}
+</div>
+{{end}}

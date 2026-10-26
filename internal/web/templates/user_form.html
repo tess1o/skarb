@@ -1,0 +1,9 @@
+{{define "content"}}
+<div class="page-head"><div><h1>{{.Title}}</h1><p class="muted">{{.EditUser.Username}}</p></div><a class="button" href="/admin/users">← Назад</a></div>
+<form method="post" action="{{.Action}}" class="card form-grid">
+  <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+  <label>Ім'я<input name="display_name" value="{{.EditUser.DisplayName}}" required></label>
+  <label>Telegram user_id<input name="telegram_id" inputmode="numeric" value="{{if .EditUser.TelegramUserID}}{{derefInt64 .EditUser.TelegramUserID}}{{end}}" placeholder="123456789"></label>
+  <div class="form-actions span2"><button class="primary" type="submit">Зберегти</button><a class="button" href="/admin/users">Скасувати</a></div>
+</form>
+{{end}}

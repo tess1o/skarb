@@ -1,0 +1,19 @@
+{{define "content"}}
+<div class="login-wrap">
+  <div class="card login-card">
+    <div class="brand big">Skarb<span>·</span></div>
+    <p class="muted">Сімейний бюджет. Вхід без реєстрації.</p>
+    <form method="post" action="/login" class="stack">
+      <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+      <input type="hidden" name="next" value="{{.Next}}">
+      <label>Логін
+        <input name="username" autocomplete="username" autofocus required>
+      </label>
+      <label>Пароль
+        <input type="password" name="password" autocomplete="current-password" required>
+      </label>
+      <button class="primary" type="submit">Увійти</button>
+    </form>
+  </div>
+</div>
+{{end}}

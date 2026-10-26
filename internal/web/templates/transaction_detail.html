@@ -1,0 +1,49 @@
+{{define "content"}}
+<div class="page-head">
+  <div><h1>{{.Transaction.Description}}</h1><p class="muted">{{fmtDate .Transaction.OccurredOn}} · {{sourceLabel .Transaction.Source}}</p></div>
+  <div class="actions">
+    <a class="button" href="/transactions/{{.Transaction.UID}}/edit">Редагувати</a>
+    <form method="post" action="/transactions/{{.Transaction.UID}}/delete" class="inline" data-confirm="Видалити транзакцію?">
+      <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+      <input type="hidden" name="reason" value="web delete">
+      <button class="danger" type="submit">Видалити</button>
+    </form>
+  </div>
+</div>
+<div class="grid two">
+  <section class="card">
+    <h2>Деталі</h2>
+    <dl class="details">
+      <dt>Сума</dt><dd class="num">{{fmtAmount .Transaction.AmountMinor .Transaction.Currency}}</dd>
+      <dt>Тип</dt><dd>{{kindLabel .Transaction.Kind}}</dd>
+      <dt>Категорія</dt><dd>{{.Transaction.CategoryEmoji}} {{.Transaction.CategoryName}}</dd>
+      <dt>Власник</dt><dd>{{.Transaction.OwnerName}}</dd>
+      <dt>Опис</dt><dd>{{.Transaction.Description}}</dd>
+      <dt>Нотатка</dt><dd>{{default .Transaction.Note "—"}}</dd>
+      <dt>Оригінальне повідомлення</dt><dd class="pre">{{default .Transaction.OriginalText "—"}}</dd>
+      <dt>Створено</dt><dd>{{fmtDateTime .Transaction.CreatedAt}}</dd>
+      <dt>Оновлено</dt><dd>{{fmtDateTime .Transaction.UpdatedAt}}</dd>
+      <dt>Версія</dt><dd>{{if .Transaction.ReplacesID}}замінює #{{derefInt64 .Transaction.ReplacesID}}{{else}}початкова{{end}}</dd>
+    </dl>
+  </section>
+  <section class="card">
+    <h2>Історія версій</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Дата</th><th>Сума</th><th>Опис / нотатка</th><th>Стан</th></tr></thead>
+        <tbody>
+        {{range .Versions}}
+          <tr>
+            <td>{{.ID}}</td>
+            <td>{{fmtDate .OccurredOn}}</td>
+            <td class="num">{{fmtAmount .AmountMinor .Currency}}</td>
+            <td>{{.Description}}{{if .Note}}<div class="muted small">{{.Note}}</div>{{end}}</td>
+            <td>{{if .DeletedAt}}<span class="badge danger">видалено</span>{{else}}<span class="badge success">активна</span>{{end}}</td>
+          </tr>
+        {{else}}<tr><td colspan="5" class="empty">Немає історії.</td></tr>{{end}}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{{end}}

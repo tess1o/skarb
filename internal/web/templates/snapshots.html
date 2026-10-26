@@ -1,0 +1,126 @@
+{{define "content"}}
+<div class="page-head">
+  <div><h1>Заощадження</h1><p class="muted">Залишки рахунків на вибрані дати. Редагує лише адміністратор.</p></div>
+  {{if .IsAdmin}}<a class="button" href="/snapshots?archived={{if .IncludeArchived}}0{{else}}1{{end}}">{{if .IncludeArchived}}Сховати архів{{else}}Показати архів{{end}}</a>{{end}}
+</div>
+
+<div class="grid two">
+  <section class="card">
+    <div class="card-head"><h2>Поточний капітал</h2><span class="muted small">на {{fmtDate .NetWorth.AsOf}}</span></div>
+    <div class="networth"><strong>{{fmtAmount .NetWorth.TotalUAH "UAH"}}</strong></div>
+    {{range .NetWorth.Accounts}}
+    <div class="mini-row"><span>{{.AccountName}} <span class="muted small">· {{.OwnerName}}</span></span><span class="num">{{fmtAmount .BalanceMinor .Currency}}{{if .HasRate}} <span class="muted small">≈ {{fmtAmount .BalanceUAH "UAH"}}</span>{{end}}</span></div>
+    {{else}}<p class="empty">Ще немає залишків.</p>{{end}}
+    {{range .NetWorth.MissingRate}}<p class="warn small">{{.}}</p>{{end}}
+  </section>
+
+  {{if .IsAdmin}}
+  <section class="card">
+    <h2>Додати рахунок</h2>
+    <form method="post" action="/accounts/new" class="stack">
+      <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+      <label>Власник<select name="owner" required>{{range .Users}}<option value="{{.ID}}">{{.DisplayName}}</option>{{end}}</select></label>
+      <label>Назва<input name="name" placeholder="bank1, готівка…" required></label>
+      <div class="grid two tight">
+        <label>Валюта<select name="currency">{{range .Currencies}}<option value="{{.}}">{{.}}</option>{{end}}</select></label>
+        <label>Тип<select name="kind"><option value="bank">Банк</option><option value="cash">Готівка</option><option value="investment">Інвестиції</option><option value="other">Інше</option></select></label>
+      </div>
+      <label class="check"><input type="checkbox" name="include" value="1" checked> враховувати в капіталі</label>
+      <label>Порядок<input type="number" name="sort" value="0"></label>
+      <button class="primary" type="submit">Створити рахунок</button>
+    </form>
+  </section>
+  {{end}}
+</div>
+
+{{if .Savings}}
+<section class="card">
+  <div class="card-head"><h2>Динаміка капіталу</h2><span class="muted small">останні 12 місяців</span></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Місяць</th><th class="num">Капітал</th><th class="num">Зміна</th><th class="num">%</th><th></th></tr></thead>
+      <tbody>
+      {{range .Savings}}
+        <tr>
+          <td>{{fmtMonth .Date}}</td>
+          <td class="num">{{fmtAmount .TotalUAH "UAH"}}</td>
+          <td class="num {{if lt .DeltaUAH 0}}expense{{else}}income{{end}}">{{fmtAmount .DeltaUAH "UAH"}}</td>
+          <td class="num">{{fmtPct .Pct}}%</td>
+          <td style="width:35%"><div class="bar-track"><div class="bar-fill" style="width:{{barPct .TotalUAH $.SavingsMax}}%;background:var(--accent)"></div></div></td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{end}}
+
+{{if .IsAdmin}}
+<section class="card">
+  <h2>Оновити залишок</h2>
+  <form method="post" action="/snapshots/upsert" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <label>Рахунок<select name="account" required>{{range .Accounts}}<option value="{{.Account.UID}}">{{.Account.Name}} · {{.Account.OwnerName}} ({{.Account.Currency}})</option>{{end}}</select></label>
+    <label>Дата<input type="date" name="date" value="{{.Today}}" required></label>
+    <label>Сума<input name="amount" inputmode="decimal" placeholder="5000,00" required></label>
+    <label>Нотатка<input name="note" placeholder="необов'язково"></label>
+    <div class="form-actions span2"><button class="primary" type="submit">Зберегти залишок</button></div>
+  </form>
+</section>
+{{end}}
+
+{{range .Accounts}}
+{{$a := .}}
+<section class="card">
+  <div class="card-head">
+    <div><h2>{{$a.Account.Name}} <span class="muted small">· {{$a.Account.OwnerName}}</span></h2>
+      <span class="muted small">{{accountKindLabel $a.Account.Kind}} · {{$a.Account.Currency}}{{if $a.Account.Archived}} · <span class="badge danger">архів</span>{{end}}{{if not $a.Account.IncludeInNetWorth}} · <span class="badge">не в капіталі</span>{{end}}</span></div>
+    <div class="actions">
+      {{with $a.Latest}}<strong>{{fmtAmount .BalanceMinor $a.Account.Currency}}</strong><span class="muted small"> на {{fmtDate .SnapshotDate}}</span>{{else}}<span class="muted">Немає залишків</span>{{end}}
+    </div>
+  </div>
+  {{with $a.Balance}}{{if .HasRate}}<p class="muted small">≈ {{fmtAmount .BalanceUAH "UAH"}} (курс на {{fmtDate .RateDate}})</p>{{else}}<p class="warn small">Немає курсу для {{.Currency}}.</p>{{end}}{{end}}
+
+  {{if $.IsAdmin}}
+  <details class="subcard">
+    <summary>Редагувати рахунок</summary>
+    <form method="post" action="/accounts/{{$a.Account.UID}}/edit" class="form-grid">
+      <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+      <label>Назва<input name="name" value="{{$a.Account.Name}}" required></label>
+      <label>Валюта<select name="currency">{{range $.Currencies}}<option value="{{.}}" {{if eq . $a.Account.Currency}}selected{{end}}>{{.}}</option>{{end}}</select></label>
+      <label>Тип<select name="kind">
+        <option value="bank" {{if eq (printf "%s" $a.Account.Kind) "bank"}}selected{{end}}>Банк</option>
+        <option value="cash" {{if eq (printf "%s" $a.Account.Kind) "cash"}}selected{{end}}>Готівка</option>
+        <option value="investment" {{if eq (printf "%s" $a.Account.Kind) "investment"}}selected{{end}}>Інвестиції</option>
+        <option value="other" {{if eq (printf "%s" $a.Account.Kind) "other"}}selected{{end}}>Інше</option>
+      </select></label>
+      <label>Порядок<input type="number" name="sort" value="{{$a.Account.SortOrder}}"></label>
+      <label class="check"><input type="checkbox" name="include" value="1" {{if $a.Account.IncludeInNetWorth}}checked{{end}}> в капіталі</label>
+      <label class="check"><input type="checkbox" name="archived" value="1" {{if $a.Account.Archived}}checked{{end}}> архів</label>
+      <div class="form-actions span2"><button class="primary" type="submit">Зберегти</button></div>
+    </form>
+    <form method="post" action="/accounts/{{$a.Account.UID}}/delete" data-confirm="Видалити рахунок?">
+      <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+      <button class="danger" type="submit">Видалити рахунок</button>
+    </form>
+  </details>
+  {{end}}
+
+  {{if $a.History}}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Дата</th><th class="num">Залишок</th><th>Нотатка</th>{{if $.IsAdmin}}<th></th>{{end}}</tr></thead>
+      <tbody>
+      {{range $a.History}}
+        <tr><td>{{fmtDate .SnapshotDate}}</td><td class="num">{{fmtAmount .BalanceMinor $a.Account.Currency}}</td><td>{{default .Note "—"}}</td>
+        {{if $.IsAdmin}}<td><form method="post" action="/snapshots/{{.UID}}/delete" class="inline"><input type="hidden" name="csrf_token" value="{{$.CSRF}}"><button class="link danger" type="submit">видалити</button></form></td>{{end}}</tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}<p class="empty">Історія залишків порожня.</p>{{end}}
+</section>
+{{else}}
+<section class="card"><p class="empty">Рахунків ще немає. Адміністратор може додати їх вище.</p></section>
+{{end}}
+{{end}}

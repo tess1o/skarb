@@ -1,0 +1,13 @@
+{{define "content"}}
+<div class="page-head"><div><h1>{{.Title}}</h1><p class="muted">Тип категорії змінити не можна.</p></div><a class="button" href="/admin/categories">← Назад</a></div>
+<form method="post" action="{{.Action}}" class="card form-grid">
+  <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+  <label>Назва<input name="name" value="{{.Category.Name}}" required></label>
+  <label>Тип<input value="{{kindLabel .Category.Kind}}" disabled></label>
+  <label>Колір<input name="color" value="{{.Category.Color}}" pattern="#[0-9a-fA-F]{6}"></label>
+  <label>Емодзі<input name="emoji" value="{{.Category.Emoji}}"></label>
+  <label>Порядок<input type="number" name="sort" value="{{.Category.SortOrder}}"></label>
+  <label class="span2">Аліаси<textarea name="aliases" rows="4">{{.Aliases}}</textarea></label>
+  <div class="form-actions span2"><button class="primary" type="submit">Зберегти</button><a class="button" href="/admin/categories">Скасувати</a></div>
+</form>
+{{end}}

@@ -1,0 +1,35 @@
+{{define "content"}}
+<div class="page-head"><div><h1>{{.Title}}</h1></div><a class="button" href="/transactions">← Назад</a></div>
+{{if .Error}}<div class="flash error">{{.Error}}</div>{{end}}
+<form class="card form-grid" method="post" action="{{.Action}}">
+  <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+  <label>Дата<input type="date" name="date" value="{{.Form.date}}" required></label>
+  <label>Сума<input name="amount" value="{{.Form.amount}}" inputmode="decimal" placeholder="512,00" required></label>
+  <label>Валюта
+    <select name="currency">
+      {{range .Currencies}}<option value="{{.}}" {{if eq . $.Form.currency}}selected{{end}}>{{.}}</option>{{end}}
+    </select>
+  </label>
+  <label>Категорія
+    <select name="category" required>
+      <option value="">Оберіть категорію</option>
+      {{range .Categories}}<option value="{{.ID}}" {{if eq (printf "%d" .ID) $.Form.category}}selected{{end}}>{{.Emoji}} {{.Name}} · {{kindLabel .Kind}}</option>{{end}}
+    </select>
+  </label>
+  {{if .IsAdmin}}
+  <label>Власник
+    <select name="owner">
+      {{range .Users}}<option value="{{.ID}}" {{if eq (printf "%d" .ID) $.Form.owner}}selected{{end}}>{{.DisplayName}}</option>{{end}}
+    </select>
+  </label>
+  {{else}}
+  <input type="hidden" name="owner" value="{{.Form.owner}}">
+  {{end}}
+  <label class="span2">Опис<input name="description" value="{{.Form.description}}" placeholder="Наприклад, обід"></label>
+  <label class="span2">Нотатка<textarea name="note" rows="3" placeholder="Коментар до транзакції">{{.Form.note}}</textarea></label>
+  <div class="form-actions span2">
+    <button class="primary" type="submit">Зберегти</button>
+    <a class="button" href="/transactions">Скасувати</a>
+  </div>
+</form>
+{{end}}
