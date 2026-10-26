@@ -436,19 +436,26 @@ func (b *Bot) processCallback(ctx context.Context, cq *models.CallbackQuery) err
 		actor.RequestID = "tg-cb:" + cq.ID
 		return b.handleToolCallback(ctx, cq, actor)
 	}
-	action, err := b.svc.Store.GetAction(ctx, cq.Data)
+	// Category buttons carry an argument after "|": the chosen category or "back".
+	token, arg, _ := strings.Cut(cq.Data, "|")
+	action, err := b.svc.Store.GetAction(ctx, token)
 	if err != nil {
 		return b.answerCallback(ctx, cq, "Кнопка застаріла.")
 	}
 	if action.UsedAt != nil || b.svc.Now().After(action.ExpiresAt) {
 		return b.answerCallback(ctx, cq, "Кнопка вже неактивна.")
 	}
-	used, err := b.svc.Store.UseAction(ctx, cq.Data)
+	actor := b.actorFor(user, cq.From.ID, chatID)
+	actor.RequestID = "tg-cb:" + cq.ID
+	if action.Action == "category" {
+		// Opening the picker must not consume the token; the handler uses it
+		// only when a category is actually chosen.
+		return b.handleCategoryCallback(ctx, chatID, actor, action, cq, arg)
+	}
+	used, err := b.svc.Store.UseAction(ctx, token)
 	if err != nil || !used {
 		return b.answerCallback(ctx, cq, "Кнопка вже використана.")
 	}
-	actor := b.actorFor(user, cq.From.ID, chatID)
-	actor.RequestID = "tg-cb:" + cq.ID
 	switch action.Action {
 	case "undo":
 		return b.handleUndoCallback(ctx, chatID, actor, action, cq)

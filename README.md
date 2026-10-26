@@ -11,7 +11,7 @@ Backend: Go + SQLite. Deployment: one Docker container. No Node build step, no e
 ## Core ideas
 
 - Send `сьогодні 512 грн за їжу, 300 грн за каву` in the family Telegram group. Skarb creates two dated, categorized transactions.
-- Each transaction gets its own **Undo** and **Comment** action. A comment creates a linked replacement version; undo restores the previous version.
+- Each transaction gets its own **Undo**, **Comment** and **Category** action. A comment or category change creates a linked replacement version; undo restores the previous version.
 - Stats are computed in Go, never by the LLM: monthly totals, category breakdowns, comparisons, trends, per-user totals, and savings history.
 - Savings are tracked as **dated account balances** (bank/cash/investment/other), not as bank/card integrations. Net worth is converted to UAH using NBU rates.
 - Everything uses one SQLite database and one audit trail. Web, Telegram, and MCP share the same permission rules.
@@ -22,7 +22,7 @@ Backend: Go + SQLite. Deployment: one Docker container. No Node build step, no e
 - Both users can view everything and edit/delete any transaction in web/MCP.
 - Only the admin can manage categories, savings accounts/snapshots, users, settings, and FX overrides.
 - Income + expenses, multiple currencies, UAH base currency, Europe/Kyiv dates.
-- Telegram allowlisted group + linked-user DMs; per-transaction Undo/Comment; natural-language stats; full MCP tool mode in DMs and on @mention/reply.
+- Telegram allowlisted group + linked-user DMs; per-transaction Undo/Comment/Category; natural-language stats; full MCP tool mode in DMs and on @mention/reply.
 - OpenAI-compatible LLM parser with strict JSON validation, one repair attempt, and a deterministic regex fallback.
 - MCP over stateless streamable HTTP + a stdio bridge for Claude Desktop.
 - Admin-configurable Telegram chat allowlist, LLM settings, two reminder crons, FX refresh/override, MCP tokens.
@@ -91,7 +91,7 @@ In a group without a mention, simple captures such as `512 грн за їжу` s
 the deterministic parser and do not call the LLM. Set `SKARB_TELEGRAM_TOOL_MODE=false`
 to disable full tool mode.
 
-The confirmation list has one pair of buttons per transaction: `↩ Скасувати N` and `✏️ Коментар N`. Clicking **Коментар** sends a ForceReply prompt; reply with the new comment. Skarb soft-deletes the old row and creates a linked replacement; **Undo** on the replacement restores the original.
+The confirmation list has one row of buttons per transaction: `↩ Скасувати N`, `✏️ Коментар N` and `🏷 Категорія N`. Clicking **Коментар** sends a ForceReply prompt; reply with the new comment. Clicking **Категорія** turns the confirmation into a picker of active categories of the same kind (`← Назад` returns without changes). In both cases Skarb soft-deletes the old row and creates a linked replacement; **Undo** on the replacement restores the original.
 
 ## LLM parser
 

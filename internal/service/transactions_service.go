@@ -341,36 +341,69 @@ func (s *Service) EditTransactionNote(ctx context.Context, actor domain.Actor, u
 	if len([]rune(note)) > 500 {
 		return nil, validation("note", "note is too long")
 	}
+	return s.replaceTransaction(ctx, actor, before, "transaction.edited_note", func(in *store.CreateTransactionInput) {
+		in.Note = note
+	})
+}
+
+// EditTransactionCategory implements the Telegram "change category" flow. Like
+// EditTransactionNote it writes a replacement row, so Undo restores the
+// previous category instead of deleting the expense.
+func (s *Service) EditTransactionCategory(ctx context.Context, actor domain.Actor, uid string, categoryID int64) (*domain.Transaction, error) {
+	if err := s.RequireAuth(actor); err != nil {
+		return nil, err
+	}
+	before, err := s.Store.GetTransactionByUID(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+	if before.Deleted() {
+		return nil, domain.ErrNotFound
+	}
+	cat, err := s.Store.GetCategoryByID(ctx, categoryID)
+	if err != nil || cat.Archived() {
+		return nil, validation("category", "unknown category")
+	}
+	if cat.Kind != before.Kind {
+		return nil, validation("category", "category kind does not match the transaction")
+	}
+	return s.replaceTransaction(ctx, actor, before, "transaction.edited_category", func(in *store.CreateTransactionInput) {
+		in.CategoryID = cat.ID
+	})
+}
+
+// replaceTransaction soft-deletes before and creates a linked copy with the
+// changes applied by mutate, in one database transaction.
+func (s *Service) replaceTransaction(ctx context.Context, actor domain.Actor, before *domain.Transaction, auditAction string, mutate func(*store.CreateTransactionInput)) (*domain.Transaction, error) {
 	createdBy := actorPtr(actor.UserID)
+	in := store.CreateTransactionInput{
+		Kind:            before.Kind,
+		AmountMinor:     before.AmountMinor,
+		Currency:        before.Currency,
+		OccurredOn:      before.OccurredOn,
+		CategoryID:      before.CategoryID,
+		OwnerUserID:     before.OwnerUserID,
+		Description:     before.Description,
+		Note:            before.Note,
+		OriginalText:    before.OriginalText,
+		Source:          before.Source,
+		CreatedByUserID: createdBy,
+		UpdatedByUserID: createdBy,
+		ReplacesID:      &before.ID,
+	}
+	mutate(&in)
 	var updated *domain.Transaction
-	err = s.withTx(ctx, func(tx *sql.Tx) error {
+	err := s.withTx(ctx, func(tx *sql.Tx) error {
 		var err error
-		updated, err = s.Store.CreateTransaction(ctx, tx, store.CreateTransactionInput{
-			Kind:            before.Kind,
-			AmountMinor:     before.AmountMinor,
-			Currency:        before.Currency,
-			OccurredOn:      before.OccurredOn,
-			CategoryID:      before.CategoryID,
-			OwnerUserID:     before.OwnerUserID,
-			Description:     before.Description,
-			Note:            note,
-			OriginalText:    before.OriginalText,
-			Source:          before.Source,
-			CreatedByUserID: createdBy,
-			UpdatedByUserID: createdBy,
-			ReplacesID:      &before.ID,
-		})
+		updated, err = s.Store.CreateTransaction(ctx, tx, in)
 		if err != nil {
 			return err
 		}
 		if err := s.Store.SoftDeleteTransaction(ctx, tx, before.ID, actor.UserID, "edited"); err != nil {
 			return err
 		}
-		if err := s.audit(ctx, tx, actor, "transaction.edited_note", "transaction", updated.UID,
-			safeTransaction(before), safeTransaction(updated)); err != nil {
-			return err
-		}
-		return nil
+		return s.audit(ctx, tx, actor, auditAction, "transaction", updated.UID,
+			safeTransaction(before), safeTransaction(updated))
 	})
 	if err != nil {
 		return nil, err

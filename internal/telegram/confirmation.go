@@ -3,6 +3,7 @@ package telegram
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -79,20 +80,10 @@ func (b *Bot) renderConfirmation(ctx context.Context, conf *domain.TelegramConfi
 			continue
 		}
 		n := i + 1
+		lines = append(lines, confirmationLine(n, tx))
 		if tx.Deleted() {
-			lines = append(lines, fmt.Sprintf("%d. ❌ <s>%s %s — %s</s> · скасовано",
-				n, escape(tx.CategoryEmoji), escape(tx.CategoryName), money.FormatAmount(tx.AmountMinor, tx.Currency)))
 			continue
 		}
-		line := fmt.Sprintf("%d. %s <b>%s</b> — %s · %s",
-			n, escape(tx.CategoryEmoji), escape(tx.CategoryName),
-			money.FormatAmount(tx.AmountMinor, tx.Currency), tx.OccurredOn.Format("02.01"))
-		if strings.TrimSpace(tx.Note) != "" {
-			line += "\n   <i>" + escape(tx.Note) + "</i>"
-		} else if tx.Description != "" && tx.Description != tx.CategoryName {
-			line += "\n   <i>" + escape(tx.Description) + "</i>"
-		}
-		lines = append(lines, line)
 		undoTok, err := auth.NewToken(16)
 		if err != nil {
 			return "", nil, err
@@ -101,28 +92,57 @@ func (b *Bot) renderConfirmation(ctx context.Context, conf *domain.TelegramConfi
 		if err != nil {
 			return "", nil, err
 		}
+		categoryTok, err := auth.NewToken(16)
+		if err != nil {
+			return "", nil, err
+		}
 		undo := "u:" + undoTok
 		comment := "c:" + commentTok
+		category := "k:" + categoryTok
 		if err := b.svc.Store.CreateAction(ctx, nil, undo, conf.ID, tx.ID, "undo", conf.ActorTelegramUserID, expires); err != nil {
 			return "", nil, err
 		}
 		if err := b.svc.Store.CreateAction(ctx, nil, comment, conf.ID, tx.ID, "comment", conf.ActorTelegramUserID, expires); err != nil {
 			return "", nil, err
 		}
+		if err := b.svc.Store.CreateAction(ctx, nil, category, conf.ID, tx.ID, "category", conf.ActorTelegramUserID, expires); err != nil {
+			return "", nil, err
+		}
 		keyboard = append(keyboard, []models.InlineKeyboardButton{
 			{Text: fmt.Sprintf("↩ Скасувати %d", n), CallbackData: undo},
 			{Text: fmt.Sprintf("✏️ Коментар %d", n), CallbackData: comment},
+			{Text: fmt.Sprintf("🏷 Категорія %d", n), CallbackData: category},
 		})
 	}
-	if len(lines) == 0 {
-		lines = []string{"Записів немає."}
-	}
-	text := "✅ <b>Записано</b>\n\n" + strings.Join(lines, "\n")
+	text := confirmationText(lines)
 	if keyboard == nil {
 		keyboard = [][]models.InlineKeyboardButton{}
 	}
 	markup := &models.InlineKeyboardMarkup{InlineKeyboard: keyboard}
 	return text, markup, nil
+}
+
+func confirmationLine(n int, tx *domain.Transaction) string {
+	if tx.Deleted() {
+		return fmt.Sprintf("%d. ❌ <s>%s %s — %s</s> · скасовано",
+			n, escape(tx.CategoryEmoji), escape(tx.CategoryName), money.FormatAmount(tx.AmountMinor, tx.Currency))
+	}
+	line := fmt.Sprintf("%d. %s <b>%s</b> — %s · %s",
+		n, escape(tx.CategoryEmoji), escape(tx.CategoryName),
+		money.FormatAmount(tx.AmountMinor, tx.Currency), tx.OccurredOn.Format("02.01"))
+	if strings.TrimSpace(tx.Note) != "" {
+		line += "\n   <i>" + escape(tx.Note) + "</i>"
+	} else if tx.Description != "" && tx.Description != tx.CategoryName {
+		line += "\n   <i>" + escape(tx.Description) + "</i>"
+	}
+	return line
+}
+
+func confirmationText(lines []string) string {
+	if len(lines) == 0 {
+		lines = []string{"Записів немає."}
+	}
+	return "✅ <b>Записано</b>\n\n" + strings.Join(lines, "\n")
 }
 
 func (b *Bot) editConfirmation(ctx context.Context, conf *domain.TelegramConfirmation, items []confirmationItem) error {
@@ -254,4 +274,120 @@ func (b *Bot) tryCommentReply(ctx context.Context, msg *models.Message, actor do
 		b.log.Warn("edit comment prompt failed", "error", redactToken(err, b.cfg.TelegramBotToken))
 	}
 	return true, nil
+}
+
+// handleCategoryCallback drives the "change category" button. The token is
+// reused across the flow: "k:<tok>" opens the picker, "k:<tok>|<categoryID>"
+// applies a choice and "k:<tok>|back" restores the confirmation. Only applying
+// a choice consumes the token.
+func (b *Bot) handleCategoryCallback(ctx context.Context, chatID int64, actor domain.Actor, action *domain.TelegramAction, cq *models.CallbackQuery, arg string) error {
+	conf, err := b.svc.Store.GetConfirmation(ctx, action.ConfirmationID)
+	if err != nil || conf.ChatID != chatID {
+		return b.answerCallback(ctx, cq, "Повідомлення недоступне.")
+	}
+	tx, err := b.svc.Store.GetTransactionByID(ctx, action.TransactionID)
+	if err != nil || tx.Deleted() {
+		return b.answerCallback(ctx, cq, "Транзакція вже недоступна.")
+	}
+	items := parseItems(conf.ItemsJSON)
+	if arg == "" {
+		return b.showCategoryPicker(ctx, conf, items, tx, action.Token, actor, cq)
+	}
+	if arg == "back" {
+		if err := b.editConfirmation(ctx, conf, items); err != nil {
+			b.log.Warn("edit confirmation failed", "error", redactToken(err, b.cfg.TelegramBotToken))
+		}
+		return b.answerCallback(ctx, cq, "")
+	}
+	categoryID, err := strconv.ParseInt(arg, 10, 64)
+	if err != nil {
+		return b.answerCallback(ctx, cq, "Невідома дія.")
+	}
+	if categoryID == tx.CategoryID {
+		if err := b.editConfirmation(ctx, conf, items); err != nil {
+			b.log.Warn("edit confirmation failed", "error", redactToken(err, b.cfg.TelegramBotToken))
+		}
+		return b.answerCallback(ctx, cq, "Категорію не змінено.")
+	}
+	used, err := b.svc.Store.UseAction(ctx, action.Token)
+	if err != nil || !used {
+		return b.answerCallback(ctx, cq, "Кнопка вже використана.")
+	}
+	updated, err := b.svc.EditTransactionCategory(ctx, actor, tx.UID, categoryID)
+	if err != nil {
+		return b.answerCallback(ctx, cq, "Не вдалося змінити категорію: "+err.Error())
+	}
+	for i := range items {
+		if items[i].UID == tx.UID {
+			items[i].UID = updated.UID
+			break
+		}
+	}
+	if err := b.editConfirmation(ctx, conf, items); err != nil {
+		b.log.Warn("edit confirmation after category change failed", "error", redactToken(err, b.cfg.TelegramBotToken))
+	}
+	return b.answerCallback(ctx, cq, "Категорія: "+updated.CategoryName)
+}
+
+func (b *Bot) showCategoryPicker(ctx context.Context, conf *domain.TelegramConfirmation, items []confirmationItem, tx *domain.Transaction, token string, actor domain.Actor, cq *models.CallbackQuery) error {
+	categories, err := b.svc.ListCategories(ctx, actor, false)
+	if err != nil {
+		return b.answerCallback(ctx, cq, "Не вдалося завантажити категорії.")
+	}
+	var lines []string
+	n := 0
+	for i, item := range items {
+		cur, err := b.svc.Store.GetTransactionByUID(ctx, item.UID)
+		if err != nil {
+			continue
+		}
+		lines = append(lines, confirmationLine(i+1, cur))
+		if cur.ID == tx.ID {
+			n = i + 1
+		}
+	}
+	current := strings.TrimSpace(tx.CategoryEmoji + " " + tx.CategoryName)
+	text := confirmationText(lines) + fmt.Sprintf("\n\n🏷 <b>Нова категорія для %d</b> (%s — %s):",
+		n, escape(current), money.FormatAmount(tx.AmountMinor, tx.Currency))
+	_, err = b.api.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+		ChatID:      conf.ChatID,
+		MessageID:   int(conf.MessageID),
+		Text:        text,
+		ParseMode:   models.ParseModeHTML,
+		ReplyMarkup: categoryPickerMarkup(categories, tx, token),
+	})
+	if err != nil {
+		b.log.Warn("show category picker failed", "error", redactToken(err, b.cfg.TelegramBotToken))
+		return b.answerCallback(ctx, cq, "Не вдалося відкрити список категорій.")
+	}
+	return b.answerCallback(ctx, cq, "Оберіть категорію.")
+}
+
+// categoryPickerMarkup lists the active categories of the transaction's kind,
+// two per row, with the current one checked.
+func categoryPickerMarkup(categories []domain.Category, tx *domain.Transaction, token string) *models.InlineKeyboardMarkup {
+	var keyboard [][]models.InlineKeyboardButton
+	var row []models.InlineKeyboardButton
+	for _, c := range categories {
+		if c.Kind != tx.Kind {
+			continue
+		}
+		label := strings.TrimSpace(c.Emoji + " " + c.Name)
+		if c.ID == tx.CategoryID {
+			label = "✓ " + label
+		}
+		row = append(row, models.InlineKeyboardButton{
+			Text:         label,
+			CallbackData: fmt.Sprintf("%s|%d", token, c.ID),
+		})
+		if len(row) == 2 {
+			keyboard = append(keyboard, row)
+			row = nil
+		}
+	}
+	if len(row) > 0 {
+		keyboard = append(keyboard, row)
+	}
+	keyboard = append(keyboard, []models.InlineKeyboardButton{{Text: "← Назад", CallbackData: token + "|back"}})
+	return &models.InlineKeyboardMarkup{InlineKeyboard: keyboard}
 }
