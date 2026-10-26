@@ -79,10 +79,10 @@ func TestRegexParserEnglish(t *testing.T) {
 	}
 }
 
-func TestRegexParserRelativeDateAndTransportAlias(t *testing.T) {
+func TestRegexParserRelativeDateAndCarExpenseAlias(t *testing.T) {
 	p, svc, cleanup := testParser(t)
 	defer cleanup()
-	transport, err := svc.Store.ResolveCategory(context.Background(), "Транспорт", nil)
+	carExpenses, err := svc.Store.ResolveCategory(context.Background(), "Витрати на машину", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestRegexParserRelativeDateAndTransportAlias(t *testing.T) {
 			t.Fatalf("%q: unexpected transactions: %+v", tc.text, intent.Transactions)
 		}
 		tx := intent.Transactions[0]
-		if tx.Date != tc.date || tx.Amount != "880" || tx.Category != transport.UID {
+		if tx.Date != tc.date || tx.Amount != "880" || tx.Category != carExpenses.UID {
 			t.Fatalf("%q: got date=%s amount=%s category=%s", tc.text, tx.Date, tx.Amount, tx.Category)
 		}
 	}
@@ -146,9 +146,9 @@ func TestRegexParserMultilineList(t *testing.T) {
 		t.Fatal(err)
 	}
 	expected := []struct{ amount, category string }{
-		{"2100", "Інше"},
+		{"2100", "Кафе/ресторани"},
 		{"300", "Інше"},
-		{"75", "Кава"},
+		{"75", "Кафе/ресторани"},
 	}
 	if len(intent.Transactions) != len(expected) {
 		t.Fatalf("expected %d transactions, got %+v", len(expected), intent.Transactions)
@@ -175,12 +175,12 @@ func TestRegexParserSingleAmountUsesMessageCategory(t *testing.T) {
 	if len(intent.Transactions) != 1 {
 		t.Fatalf("expected 1 transaction, got %+v", intent.Transactions)
 	}
-	coffee, err := svc.Store.ResolveCategory(context.Background(), "Кава", nil)
+	coffee, err := svc.Store.ResolveCategory(context.Background(), "Кафе/ресторани", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if intent.Transactions[0].Category != coffee.UID {
-		t.Fatalf("expected category Кава, got %+v", intent.Transactions[0])
+		t.Fatalf("expected category Кафе/ресторани, got %+v", intent.Transactions[0])
 	}
 }
 
