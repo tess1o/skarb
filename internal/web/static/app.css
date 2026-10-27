@@ -228,6 +228,12 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
 input:hover, select:hover, textarea:hover { border-color: color-mix(in srgb, var(--muted) 45%, var(--line)); }
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: var(--ring); }
 input[type="checkbox"], input[type="radio"] { width: auto; height: auto; box-shadow: none; }
+/* iOS Safari sizes native date fields to their text and ignores width: 100%,
+   so they overflow narrow grid cells; dropping the native look lets them shrink. */
+@supports (-webkit-touch-callout: none) {
+  input[type="date"] { -webkit-appearance: none; appearance: none; min-width: 0; display: block; }
+  input[type="date"]::-webkit-date-and-time-value { text-align: left; }
+}
 textarea { height: auto; padding: 9px 12px; resize: vertical; }
 .tx-form input[name="amount"] { height: 48px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
