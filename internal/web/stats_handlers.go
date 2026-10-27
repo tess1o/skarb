@@ -42,17 +42,17 @@ func (s *Server) statsPage(w http.ResponseWriter, r *http.Request) {
 	f := store.TransactionFilter{From: &from, To: &to, OwnerUserID: userID}
 	summary, err := s.svc.Summary(r.Context(), actor, f)
 	if err != nil {
-		s.renderError(w, r, http.StatusInternalServerError, err.Error())
+		s.renderError(w, r, http.StatusInternalServerError, s.errText(r, err))
 		return
 	}
 	categories, err := s.svc.CategoryBreakdown(r.Context(), actor, f, kind, 0)
 	if err != nil {
-		s.renderError(w, r, http.StatusInternalServerError, err.Error())
+		s.renderError(w, r, http.StatusInternalServerError, s.errText(r, err))
 		return
 	}
 	users, err := s.svc.UserBreakdown(r.Context(), actor, f)
 	if err != nil {
-		s.renderError(w, r, http.StatusInternalServerError, err.Error())
+		s.renderError(w, r, http.StatusInternalServerError, s.errText(r, err))
 		return
 	}
 	days := int(to.Time.Sub(from.Time).Hours()/24) + 1
@@ -62,14 +62,14 @@ func (s *Server) statsPage(w http.ResponseWriter, r *http.Request) {
 	}
 	trend, err := s.svc.Trend(r.Context(), actor, from, to, granularity)
 	if err != nil {
-		s.renderError(w, r, http.StatusInternalServerError, err.Error())
+		s.renderError(w, r, http.StatusInternalServerError, s.errText(r, err))
 		return
 	}
 	prevTo := from.AddDays(-1)
 	prevFrom := prevTo.AddDays(-(days - 1))
 	comparison, err := s.svc.Compare(r.Context(), actor, domain.DateRange{From: from, To: to}, domain.DateRange{From: prevFrom, To: prevTo}, userID)
 	if err != nil {
-		s.renderError(w, r, http.StatusInternalServerError, err.Error())
+		s.renderError(w, r, http.StatusInternalServerError, s.errText(r, err))
 		return
 	}
 	allUsers, _ := s.svc.ListUsers(r.Context(), actor, false)
@@ -111,7 +111,7 @@ func (s *Server) statsCSV(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := s.svc.CategoryBreakdown(r.Context(), actor, store.TransactionFilter{From: &from, To: &to}, kind, 0)
 	if err != nil {
-		s.renderError(w, r, http.StatusInternalServerError, err.Error())
+		s.renderError(w, r, http.StatusInternalServerError, s.errText(r, err))
 		return
 	}
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")

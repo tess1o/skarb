@@ -2,12 +2,22 @@
 <div class="page-head">
   <div><h1>{{.Transaction.Description}}</h1><p class="muted">{{fmtDate .Transaction.OccurredOn}} · {{sourceLabel .Transaction.Source}}</p></div>
   <div class="actions">
+    {{if .Transaction.Deleted}}
+    <span class="badge danger">видалено</span>
+    <form method="post" action="/transactions/restore" class="inline">
+      <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+      <input type="hidden" name="uid" value="{{.Transaction.UID}}">
+      <input type="hidden" name="next" value="{{.RequestURI}}">
+      <button class="button" type="submit">Відновити</button>
+    </form>
+    {{else}}
     <a class="button" href="/transactions/{{.Transaction.UID}}/edit">Редагувати</a>
-    <form method="post" action="/transactions/{{.Transaction.UID}}/delete" class="inline" data-confirm="Видалити транзакцію?">
+    <form method="post" action="/transactions/{{.Transaction.UID}}/delete" class="inline">
       <input type="hidden" name="csrf_token" value="{{.CSRF}}">
       <input type="hidden" name="reason" value="web delete">
       <button class="danger" type="submit">Видалити</button>
     </form>
+    {{end}}
   </div>
 </div>
 <div class="grid two">

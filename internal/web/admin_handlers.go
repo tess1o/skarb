@@ -20,7 +20,7 @@ func (s *Server) adminSettingsPage(w http.ResponseWriter, r *http.Request) {
 	actor := s.actor(r)
 	llm, err := s.svc.GetLLMConfig(r.Context())
 	if err != nil {
-		s.renderError(w, r, http.StatusInternalServerError, err.Error())
+		s.renderError(w, r, http.StatusInternalServerError, s.errText(r, err))
 		return
 	}
 	chats, _ := s.svc.ListTelegramChats(r.Context(), actor)
@@ -66,7 +66,7 @@ func (s *Server) adminLLMUpdate(w http.ResponseWriter, r *http.Request) {
 		Temperature:     temp,
 	}
 	if err := s.svc.SetLLMConfig(r.Context(), s.actor(r), cfg); err != nil {
-		s.setFlash(w, "error", "Не вдалося зберегти налаштування ШІ: "+err.Error())
+		s.setFlash(w, "error", "Не вдалося зберегти налаштування ШІ: "+s.errText(r, err))
 	} else {
 		s.setFlash(w, "success", "Налаштування ШІ збережено.")
 	}
@@ -114,7 +114,7 @@ func (s *Server) adminTelegramAdd(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.svc.AddTelegramChat(r.Context(), s.actor(r), chatID,
 		r.FormValue("title"), r.FormValue("chat_type")); err != nil {
-		s.setFlash(w, "error", "Не вдалося додати чат: "+err.Error())
+		s.setFlash(w, "error", "Не вдалося додати чат: "+s.errText(r, err))
 	} else {
 		s.setFlash(w, "success", "Чат додано.")
 	}
@@ -129,7 +129,7 @@ func (s *Server) adminTelegramRemove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.svc.RemoveTelegramChat(r.Context(), s.actor(r), chatID); err != nil {
-		s.setFlash(w, "error", "Не вдалося видалити чат: "+err.Error())
+		s.setFlash(w, "error", "Не вдалося видалити чат: "+s.errText(r, err))
 	} else {
 		s.setFlash(w, "success", "Чат видалено.")
 	}
@@ -154,7 +154,7 @@ func (s *Server) adminReminderUpdate(w http.ResponseWriter, r *http.Request) {
 		cfg.Timezone = tz
 	}
 	if err := s.svc.UpdateReminderConfig(r.Context(), s.actor(r), cfg); err != nil {
-		s.setFlash(w, "error", "Не вдалося зберегти нагадування: "+err.Error())
+		s.setFlash(w, "error", "Не вдалося зберегти нагадування: "+s.errText(r, err))
 	} else {
 		if s.OnRemindersChanged != nil {
 			s.OnRemindersChanged()
@@ -181,7 +181,7 @@ func (s *Server) adminFXOverride(w http.ResponseWriter, r *http.Request) {
 	}
 	rate := r.FormValue("rate")
 	if err := s.svc.FX.ManualOverride(r.Context(), currency, date, rate, s.actor(r).UserID); err != nil {
-		s.setFlash(w, "error", "Не вдалося зберегти курс: "+err.Error())
+		s.setFlash(w, "error", "Не вдалося зберегти курс: "+s.errText(r, err))
 	} else {
 		_ = s.svc.Store.InsertAudit(r.Context(), nil, store.AuditEntry{
 			Actor: s.actor(r), Action: "fx.manual_override", EntityType: "exchange_rate",
@@ -199,7 +199,7 @@ func (s *Server) adminTokenCreate(w http.ResponseWriter, r *http.Request) {
 		Name:          r.FormValue("name"),
 	})
 	if err != nil {
-		s.setFlash(w, "error", "Не вдалося створити токен: "+err.Error())
+		s.setFlash(w, "error", "Не вдалося створити токен: "+s.errText(r, err))
 	} else {
 		s.setFlash(w, "success", "Токен створено. Скопіюйте його зараз: "+plain)
 	}
@@ -208,7 +208,7 @@ func (s *Server) adminTokenCreate(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) adminTokenRevoke(w http.ResponseWriter, r *http.Request) {
 	if err := s.svc.RevokeAPIToken(r.Context(), s.actor(r), r.PathValue("uid")); err != nil {
-		s.setFlash(w, "error", "Не вдалося відкликати токен: "+err.Error())
+		s.setFlash(w, "error", "Не вдалося відкликати токен: "+s.errText(r, err))
 	} else {
 		s.setFlash(w, "success", "Токен відкликано.")
 	}
@@ -241,7 +241,7 @@ func (s *Server) auditPage(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := s.svc.ListAudit(r.Context(), s.actor(r), f)
 	if err != nil {
-		s.renderError(w, r, http.StatusInternalServerError, err.Error())
+		s.renderError(w, r, http.StatusInternalServerError, s.errText(r, err))
 		return
 	}
 	users, _ := s.svc.ListUsers(r.Context(), s.actor(r), true)
@@ -263,14 +263,14 @@ func (s *Server) auditPage(w http.ResponseWriter, r *http.Request) {
 func (s *Server) backupDownload(w http.ResponseWriter, r *http.Request) {
 	backupDir := filepath.Join(filepath.Dir(s.svc.Store.Path), "backups")
 	if err := os.MkdirAll(backupDir, 0o700); err != nil {
-		s.renderError(w, r, http.StatusInternalServerError, err.Error())
+		s.renderError(w, r, http.StatusInternalServerError, s.errText(r, err))
 		return
 	}
 	name := "download-" + time.Now().UTC().Format("20060102T150405Z") + ".db"
 	target := filepath.Join(backupDir, name)
 	stmt := "VACUUM INTO '" + strings.ReplaceAll(target, "'", "''") + "'"
 	if _, err := s.svc.Store.DB.ExecContext(r.Context(), stmt); err != nil {
-		s.renderError(w, r, http.StatusInternalServerError, "Не вдалося створити резервну копію: "+err.Error())
+		s.renderError(w, r, http.StatusInternalServerError, "Не вдалося створити резервну копію: "+s.errText(r, err))
 		return
 	}
 	defer os.Remove(target)

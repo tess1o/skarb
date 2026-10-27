@@ -22,12 +22,12 @@ func (s *Server) snapshotsPage(w http.ResponseWriter, r *http.Request) {
 	includeArchived := currentUser(r.Context()).IsAdmin() && r.URL.Query().Get("archived") == "1"
 	accounts, err := s.svc.ListAccounts(r.Context(), actor, includeArchived)
 	if err != nil {
-		s.renderError(w, r, http.StatusInternalServerError, err.Error())
+		s.renderError(w, r, http.StatusInternalServerError, s.errText(r, err))
 		return
 	}
 	netWorth, err := s.svc.NetWorth(r.Context(), actor, s.svc.Today())
 	if err != nil {
-		s.renderError(w, r, http.StatusInternalServerError, err.Error())
+		s.renderError(w, r, http.StatusInternalServerError, s.errText(r, err))
 		return
 	}
 	balances := map[int64]*domain.AccountBalance{}
@@ -85,7 +85,7 @@ func (s *Server) accountCreate(w http.ResponseWriter, r *http.Request) {
 		SortOrder:         atoiDefault(r.FormValue("sort"), 0),
 	}
 	if _, err := s.svc.CreateAccount(r.Context(), s.actor(r), in); err != nil {
-		s.setFlash(w, "error", "Не вдалося створити рахунок: "+err.Error())
+		s.setFlash(w, "error", "Не вдалося створити рахунок: "+s.errText(r, err))
 	} else {
 		s.setFlash(w, "success", "Рахунок створено.")
 	}
@@ -109,7 +109,7 @@ func (s *Server) accountUpdate(w http.ResponseWriter, r *http.Request) {
 		Archived:          &archived,
 	}
 	if _, err := s.svc.UpdateAccount(r.Context(), s.actor(r), uid, in); err != nil {
-		s.setFlash(w, "error", "Не вдалося оновити рахунок: "+err.Error())
+		s.setFlash(w, "error", "Не вдалося оновити рахунок: "+s.errText(r, err))
 	} else {
 		s.setFlash(w, "success", "Рахунок оновлено.")
 	}
@@ -118,7 +118,7 @@ func (s *Server) accountUpdate(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) accountDelete(w http.ResponseWriter, r *http.Request) {
 	if err := s.svc.DeleteAccount(r.Context(), s.actor(r), r.PathValue("uid")); err != nil {
-		s.setFlash(w, "error", "Не вдалося видалити рахунок: "+err.Error())
+		s.setFlash(w, "error", "Не вдалося видалити рахунок: "+s.errText(r, err))
 	} else {
 		s.setFlash(w, "success", "Рахунок видалено.")
 	}
@@ -133,7 +133,7 @@ func (s *Server) snapshotUpsert(w http.ResponseWriter, r *http.Request) {
 		Note:       r.FormValue("note"),
 	}
 	if _, err := s.svc.UpsertSnapshot(r.Context(), s.actor(r), in); err != nil {
-		s.setFlash(w, "error", "Не вдалося зберегти залишок: "+err.Error())
+		s.setFlash(w, "error", "Не вдалося зберегти залишок: "+s.errText(r, err))
 	} else {
 		s.setFlash(w, "success", "Залишок збережено.")
 	}
@@ -142,7 +142,7 @@ func (s *Server) snapshotUpsert(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) snapshotDelete(w http.ResponseWriter, r *http.Request) {
 	if err := s.svc.DeleteSnapshot(r.Context(), s.actor(r), r.PathValue("uid")); err != nil {
-		s.setFlash(w, "error", "Не вдалося видалити залишок: "+err.Error())
+		s.setFlash(w, "error", "Не вдалося видалити залишок: "+s.errText(r, err))
 	} else {
 		s.setFlash(w, "success", "Залишок видалено.")
 	}

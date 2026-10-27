@@ -272,35 +272,27 @@ const MaxBulkDelete = 200
 // DeleteTransactions soft-deletes several transactions in one database
 // transaction: either all of them are deleted or none are. Rows that are
 // already deleted are skipped, so a stale page can be resubmitted safely.
-// It returns the number of rows actually deleted.
-func (s *Service) DeleteTransactions(ctx context.Context, actor domain.Actor, uids []string, reason string) (int, error) {
+// It returns the UIDs actually deleted.
+func (s *Service) DeleteTransactions(ctx context.Context, actor domain.Actor, uids []string, reason string) ([]string, error) {
 	if err := s.RequireAuth(actor); err != nil {
-		return 0, err
+		return nil, err
 	}
 	reason = strings.TrimSpace(reason)
 	if len([]rune(reason)) > 200 {
-		return 0, validation("reason", "reason is too long")
+		return nil, validation("reason", "reason is too long")
 	}
-	seen := map[string]bool{}
-	var unique []string
-	for _, uid := range uids {
-		uid = strings.TrimSpace(uid)
-		if uid != "" && !seen[uid] {
-			seen[uid] = true
-			unique = append(unique, uid)
-		}
-	}
+	unique := dedupeUIDs(uids)
 	if len(unique) == 0 {
-		return 0, validation("uids", "no transactions selected")
+		return nil, validation("uids", "no transactions selected")
 	}
 	if len(unique) > MaxBulkDelete {
-		return 0, validation("uids", fmt.Sprintf("at most %d transactions at once", MaxBulkDelete))
+		return nil, validation("uids", fmt.Sprintf("at most %d transactions at once", MaxBulkDelete))
 	}
 	var targets []*domain.Transaction
 	for _, uid := range unique {
 		tx, err := s.Store.GetTransactionByUID(ctx, uid)
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
 		if !tx.Deleted() {
 			targets = append(targets, tx)
@@ -319,9 +311,27 @@ func (s *Service) DeleteTransactions(ctx context.Context, actor domain.Actor, ui
 		return nil
 	})
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return len(targets), nil
+	deleted := make([]string, len(targets))
+	for i, tx := range targets {
+		deleted[i] = tx.UID
+	}
+	return deleted, nil
+}
+
+// dedupeUIDs trims uids and drops blanks and repeats, keeping the first order.
+func dedupeUIDs(uids []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, uid := range uids {
+		uid = strings.TrimSpace(uid)
+		if uid != "" && !seen[uid] {
+			seen[uid] = true
+			out = append(out, uid)
+		}
+	}
+	return out
 }
 
 // EditTransactionNote implements the Telegram comment flow: the old row is
@@ -465,24 +475,67 @@ func (s *Service) LatestTransactionByOwner(ctx context.Context, actor domain.Act
 	return &rows[0], nil
 }
 
+// RestoreTransaction brings back one deleted transaction; see RestoreTransactions.
 func (s *Service) RestoreTransaction(ctx context.Context, actor domain.Actor, uid string) error {
-	if err := s.RequireAdmin(actor); err != nil {
-		return err
-	}
-	tx, err := s.Store.GetTransactionByUID(ctx, uid)
-	if err != nil {
-		return err
-	}
-	if !tx.Deleted() {
-		return domain.ErrConflict
-	}
-	err = s.withTx(ctx, func(sqlTx *sql.Tx) error {
-		if err := s.Store.RestoreTransaction(ctx, sqlTx, tx.ID, actor.UserID); err != nil {
-			return err
-		}
-		return s.audit(ctx, sqlTx, actor, "transaction.restored", "transaction", tx.UID, nil, nil)
-	})
+	_, err := s.RestoreTransactions(ctx, actor, []string{uid})
 	return err
+}
+
+// RestoreTransactions undeletes transactions in one database transaction.
+// Admins may restore anything; other users only rows they deleted themselves.
+// A row is refused when another version of it (an edit or the original) is
+// active, since restoring it would duplicate the entry. Rows that are not
+// deleted are skipped. It returns the number of rows restored.
+func (s *Service) RestoreTransactions(ctx context.Context, actor domain.Actor, uids []string) (int, error) {
+	if err := s.RequireAuth(actor); err != nil {
+		return 0, err
+	}
+	unique := dedupeUIDs(uids)
+	if len(unique) == 0 {
+		return 0, validation("uids", "no transactions selected")
+	}
+	if len(unique) > MaxBulkDelete {
+		return 0, validation("uids", fmt.Sprintf("at most %d transactions at once", MaxBulkDelete))
+	}
+	var targets []*domain.Transaction
+	for _, uid := range unique {
+		tx, err := s.Store.GetTransactionByUID(ctx, uid)
+		if err != nil {
+			return 0, err
+		}
+		if !tx.Deleted() {
+			continue
+		}
+		deletedBySelf := tx.DeletedByUserID != nil && *tx.DeletedByUserID == actor.UserID
+		if actor.Role != domain.RoleAdmin && !deletedBySelf {
+			return 0, domain.ErrForbidden
+		}
+		versions, err := s.Store.ListTransactionVersions(ctx, uid)
+		if err != nil {
+			return 0, err
+		}
+		for _, v := range versions {
+			if v.ID != tx.ID && !v.Deleted() {
+				return 0, fmt.Errorf("%w: іншу версію цієї транзакції вже активовано", domain.ErrConflict)
+			}
+		}
+		targets = append(targets, tx)
+	}
+	err := s.withTx(ctx, func(sqlTx *sql.Tx) error {
+		for _, tx := range targets {
+			if err := s.Store.RestoreTransaction(ctx, sqlTx, tx.ID, actor.UserID); err != nil {
+				return err
+			}
+			if err := s.audit(ctx, sqlTx, actor, "transaction.restored", "transaction", tx.UID, nil, nil); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return len(targets), nil
 }
 
 func (s *Service) ListTransactions(ctx context.Context, actor domain.Actor, f store.TransactionFilter) ([]domain.Transaction, int, error) {

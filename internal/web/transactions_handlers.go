@@ -22,32 +22,39 @@ func (s *Server) transactionsPage(w http.ResponseWriter, r *http.Request) {
 	f.Offset = (page - 1) * 50
 	rows, total, err := s.svc.ListTransactions(r.Context(), actor, f)
 	if err != nil {
-		s.renderError(w, r, http.StatusInternalServerError, "Не вдалося завантажити транзакції: "+err.Error())
+		s.renderError(w, r, http.StatusInternalServerError, "Не вдалося завантажити транзакції: "+s.errText(r, err))
 		return
 	}
 	categories, _ := s.svc.ListCategories(r.Context(), actor, false)
 	users, _ := s.svc.ListUsers(r.Context(), actor, false)
+	activeFilters := 0
+	for _, key := range []string{"from", "to", "user", "category", "kind", "source", "q", "deleted"} {
+		if r.URL.Query().Get(key) != "" {
+			activeFilters++
+		}
+	}
 	pages := (total + 49) / 50
 	if pages > 0 && page > pages {
 		// E.g. after deleting every row on the last page: show the new last page.
 		page = pages
 		f.Offset = (page - 1) * 50
 		if rows, total, err = s.svc.ListTransactions(r.Context(), actor, f); err != nil {
-			s.renderError(w, r, http.StatusInternalServerError, "Не вдалося завантажити транзакції: "+err.Error())
+			s.renderError(w, r, http.StatusInternalServerError, "Не вдалося завантажити транзакції: "+s.errText(r, err))
 			return
 		}
 	}
 	s.render(w, r, "transactions.html", map[string]any{
-		"Title":        "Транзакції",
-		"Transactions": rows,
-		"Total":        total,
-		"Page":         page,
-		"Pages":        pages,
-		"PrevPage":     page - 1,
-		"NextPage":     page + 1,
-		"BaseQuery":    baseQuery,
-		"Categories":   categories,
-		"Users":        users,
+		"Title":         "Транзакції",
+		"Transactions":  rows,
+		"Total":         total,
+		"Page":          page,
+		"Pages":         pages,
+		"PrevPage":      page - 1,
+		"NextPage":      page + 1,
+		"BaseQuery":     baseQuery,
+		"Categories":    categories,
+		"Users":         users,
+		"ActiveFilters": activeFilters,
 		"Filter": map[string]string{
 			"from":     r.URL.Query().Get("from"),
 			"to":       r.URL.Query().Get("to"),
@@ -120,11 +127,32 @@ func (s *Server) transactionFilters(r *http.Request) (store.TransactionFilter, s
 }
 
 func (s *Server) transactionNewPage(w http.ResponseWriter, r *http.Request) {
-	s.renderTransactionForm(w, r, nil, map[string]string{
+	q := r.URL.Query()
+	form := map[string]string{
 		"date":     s.svc.Today().String(),
 		"currency": "UAH",
 		"owner":    fmt.Sprint(currentUser(r.Context()).ID),
-	}, "", "/transactions/new")
+		"category": q.Get("category"),
+	}
+	// "Зберегти й додати ще" carries the date and currency over to the next entry.
+	if d, err := domain.ParseDate(q.Get("date")); err == nil {
+		form["date"] = d.String()
+	}
+	if c := q.Get("currency"); c != "" {
+		form["currency"] = c
+	}
+	if form["category"] == "" {
+		// Default to the category of the user's latest expense: usually the next one too.
+		actor := s.actor(r)
+		expense := domain.KindExpense
+		rows, _, err := s.svc.ListTransactions(r.Context(), actor, store.TransactionFilter{
+			OwnerUserID: &actor.UserID, Kind: &expense, Limit: 1,
+		})
+		if err == nil && len(rows) > 0 {
+			form["category"] = fmt.Sprint(rows[0].CategoryID)
+		}
+	}
+	s.renderTransactionForm(w, r, nil, form, "", "/transactions/new")
 }
 
 func (s *Server) transactionCreate(w http.ResponseWriter, r *http.Request) {
@@ -147,7 +175,13 @@ func (s *Server) transactionCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	_, err := s.svc.CreateTransaction(r.Context(), s.actor(r), item, domain.SourceWeb, form["note"])
 	if err != nil {
-		s.renderTransactionForm(w, r, nil, form, err.Error(), "/transactions/new")
+		s.renderTransactionForm(w, r, nil, form, s.errText(r, err), "/transactions/new")
+		return
+	}
+	if r.FormValue("again") != "" {
+		s.setFlash(w, "success", "Транзакцію додано. Додайте наступну.")
+		next := url.Values{"category": {form["category"]}, "date": {form["date"]}, "currency": {form["currency"]}}
+		s.redirect(w, r, "/transactions/new?"+next.Encode())
 		return
 	}
 	s.setFlash(w, "success", "Транзакцію додано.")
@@ -194,7 +228,7 @@ func (s *Server) transactionUpdate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if _, err := s.svc.UpdateTransaction(r.Context(), s.actor(r), uid, in); err != nil {
-		s.renderTransactionForm(w, r, tx, form, err.Error(), "/transactions/"+uid+"/edit")
+		s.renderTransactionForm(w, r, tx, form, s.errText(r, err), "/transactions/"+uid+"/edit")
 		return
 	}
 	s.setFlash(w, "success", "Транзакцію оновлено.")
@@ -204,9 +238,9 @@ func (s *Server) transactionUpdate(w http.ResponseWriter, r *http.Request) {
 func (s *Server) transactionDelete(w http.ResponseWriter, r *http.Request) {
 	uid := r.PathValue("uid")
 	if err := s.svc.DeleteTransaction(r.Context(), s.actor(r), uid, r.FormValue("reason")); err != nil {
-		s.setFlash(w, "error", "Не вдалося видалити транзакцію: "+err.Error())
+		s.setFlash(w, "error", "Не вдалося видалити транзакцію: "+s.errText(r, err))
 	} else {
-		s.setFlash(w, "success", "Транзакцію видалено.")
+		s.setFlashUndo(w, "Транзакцію видалено.", []string{uid})
 	}
 	s.redirect(w, r, nextOr(r, "/transactions"))
 }
@@ -216,14 +250,33 @@ func (s *Server) transactionsBulkDelete(w http.ResponseWriter, r *http.Request) 
 		s.renderError(w, r, http.StatusBadRequest, "Некоректна форма.")
 		return
 	}
-	n, err := s.svc.DeleteTransactions(r.Context(), s.actor(r), r.PostForm["uid"], r.PostFormValue("reason"))
-	switch {
+	deleted, err := s.svc.DeleteTransactions(r.Context(), s.actor(r), r.PostForm["uid"], r.PostFormValue("reason"))
+	switch n := len(deleted); {
 	case err != nil:
-		s.setFlash(w, "error", "Не вдалося видалити транзакції: "+err.Error())
+		s.setFlash(w, "error", "Не вдалося видалити транзакції: "+s.errText(r, err))
 	case n == 0:
 		s.setFlash(w, "warning", "Вибрані транзакції вже видалено.")
 	default:
-		s.setFlash(w, "success", fmt.Sprintf("Видалено %d %s.", n, pluralUK(n, "транзакцію", "транзакції", "транзакцій")))
+		s.setFlashUndo(w, fmt.Sprintf("Видалено %d %s.", n, pluralUK(n, "транзакцію", "транзакції", "транзакцій")), deleted)
+	}
+	s.redirect(w, r, nextOr(r, "/transactions"))
+}
+
+// transactionsRestore undeletes the posted uids: the flash's undo button and
+// the "Відновити" buttons on deleted rows both post here.
+func (s *Server) transactionsRestore(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		s.renderError(w, r, http.StatusBadRequest, "Некоректна форма.")
+		return
+	}
+	n, err := s.svc.RestoreTransactions(r.Context(), s.actor(r), r.PostForm["uid"])
+	switch {
+	case err != nil:
+		s.setFlash(w, "error", "Не вдалося відновити: "+s.errText(r, err))
+	case n == 0:
+		s.setFlash(w, "warning", "Нічого відновлювати: транзакції не видалені.")
+	default:
+		s.setFlash(w, "success", fmt.Sprintf("Відновлено %d %s.", n, pluralUK(n, "транзакцію", "транзакції", "транзакцій")))
 	}
 	s.redirect(w, r, nextOr(r, "/transactions"))
 }
@@ -258,8 +311,24 @@ func (s *Server) renderTransactionForm(w http.ResponseWriter, r *http.Request, t
 	if tx != nil {
 		title = "Редагування транзакції"
 	}
+	// The type toggle follows the selected category; new entries default to expense.
+	kind := domain.KindExpense
+	var expense, income []domain.Category
+	for _, c := range categories {
+		if fmt.Sprint(c.ID) == form["category"] {
+			kind = c.Kind
+		}
+		if c.Kind == domain.KindIncome {
+			income = append(income, c)
+		} else {
+			expense = append(expense, c)
+		}
+	}
 	s.render(w, r, "transaction_form.html", map[string]any{
 		"Title":       title,
+		"Kind":        string(kind),
+		"Expense":     expense,
+		"Income":      income,
 		"Transaction": tx,
 		"Form":        form,
 		"Error":       errMsg,
@@ -277,7 +346,7 @@ func (s *Server) transactionsCSV(w http.ResponseWriter, r *http.Request) {
 	f.Offset = 0
 	rows, _, err := s.svc.ListTransactions(r.Context(), s.actor(r), f)
 	if err != nil {
-		s.renderError(w, r, http.StatusInternalServerError, err.Error())
+		s.renderError(w, r, http.StatusInternalServerError, s.errText(r, err))
 		return
 	}
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")

@@ -11,10 +11,12 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io/fs"
 	"log/slog"
+	"mime"
 	"net"
 	"net/http"
 	"strings"
@@ -41,6 +43,11 @@ type Server struct {
 	MCPHandler         http.Handler
 	OnRemindersChanged func()
 	OnTestReminder     func(kind string, telegramUserID int64) error
+}
+
+func init() {
+	// Go's built-in table lacks the web app manifest type.
+	_ = mime.AddExtensionType(".webmanifest", "application/manifest+json")
 }
 
 func New(svc *service.Service, cfg config.Config, logger *slog.Logger) (*Server, error) {
@@ -70,7 +77,7 @@ func New(svc *service.Service, cfg config.Config, logger *slog.Logger) (*Server,
 		"login.html", "dashboard.html", "transactions.html", "transaction_form.html",
 		"transaction_detail.html", "stats.html", "snapshots.html", "categories.html",
 		"category_form.html", "users.html", "user_form.html", "settings.html",
-		"own_settings.html", "audit.html", "error.html",
+		"own_settings.html", "audit.html", "error.html", "menu.html",
 	}
 	s.pages = map[string]*template.Template{}
 	for _, page := range pageNames {
@@ -97,6 +104,7 @@ func (s *Server) Handler() http.Handler {
 
 	mux.Handle("POST /logout", s.requireAuth(http.HandlerFunc(s.logout)))
 	mux.Handle("GET /{$}", s.requireAuth(http.HandlerFunc(s.dashboard)))
+	mux.Handle("GET /menu", s.requireAuth(http.HandlerFunc(s.menuPage)))
 
 	mux.Handle("GET /transactions", s.requireAuth(http.HandlerFunc(s.transactionsPage)))
 	mux.Handle("GET /transactions/new", s.requireAuth(http.HandlerFunc(s.transactionNewPage)))
@@ -106,6 +114,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /transactions/{uid}/edit", s.requireAuth(http.HandlerFunc(s.transactionUpdate)))
 	mux.Handle("POST /transactions/{uid}/delete", s.requireAuth(http.HandlerFunc(s.transactionDelete)))
 	mux.Handle("POST /transactions/delete", s.requireAuth(http.HandlerFunc(s.transactionsBulkDelete)))
+	mux.Handle("POST /transactions/restore", s.requireAuth(http.HandlerFunc(s.transactionsRestore)))
 	mux.Handle("GET /transactions/export.csv", s.requireAuth(http.HandlerFunc(s.transactionsCSV)))
 
 	mux.Handle("GET /stats", s.requireAuth(http.HandlerFunc(s.statsPage)))
@@ -325,12 +334,51 @@ func (s *Server) renderError(w http.ResponseWriter, r *http.Request, status int,
 	s.renderStatus(w, r, status, "error.html", map[string]any{"Title": "Помилка", "Message": message, "Status": status})
 }
 
+// errText turns err into a message safe to show a user. Validation errors are
+// written for users and shown as is; the domain sentinels get short Ukrainian
+// text; anything else (database, I/O, programming errors) is logged with the
+// request ID and replaced by a generic message quoting that ID.
+func (s *Server) errText(r *http.Request, err error) string {
+	var verr *domain.ValidationError
+	switch {
+	case errors.As(err, &verr):
+		return verr.Error()
+	case errors.Is(err, domain.ErrNotFound):
+		return "не знайдено"
+	case errors.Is(err, domain.ErrForbidden), errors.Is(err, domain.ErrUnauthorized):
+		return "недостатньо прав"
+	case errors.Is(err, domain.ErrConflict):
+		// Our own conflicts wrap a human-readable reason: "conflict: <reason>".
+		if _, reason, ok := strings.Cut(err.Error(), ": "); ok {
+			return reason
+		}
+		return "конфлікт даних"
+	}
+	id := requestIDFrom(r.Context())
+	s.log.Error("request failed", "method", r.Method, "path", r.URL.Path, "request_id", id, "error", err)
+	return "внутрішня помилка (код " + id + ")"
+}
+
 func (s *Server) redirect(w http.ResponseWriter, r *http.Request, path string) {
 	http.Redirect(w, r, path, http.StatusSeeOther)
 }
 
 func (s *Server) setFlash(w http.ResponseWriter, kind, message string) {
-	b, _ := json.Marshal(flashMessage{Kind: kind, Message: message})
+	s.writeFlash(w, flashMessage{Kind: kind, Message: message})
+}
+
+// setFlashUndo shows message with an undo button that restores uids. Larger
+// selections get no button; admins can still restore them from the list.
+func (s *Server) setFlashUndo(w http.ResponseWriter, message string, uids []string) {
+	f := flashMessage{Kind: "success", Message: message}
+	if len(uids) <= maxUndoUIDs {
+		f.Undo = uids
+	}
+	s.writeFlash(w, f)
+}
+
+func (s *Server) writeFlash(w http.ResponseWriter, f flashMessage) {
+	b, _ := json.Marshal(f)
 	http.SetCookie(w, &http.Cookie{
 		Name:     "skarb_flash",
 		Value:    base64.RawURLEncoding.EncodeToString(b),
@@ -345,7 +393,12 @@ func (s *Server) setFlash(w http.ResponseWriter, kind, message string) {
 type flashMessage struct {
 	Kind    string `json:"kind"`
 	Message string `json:"message"`
+	// Undo lists transaction UIDs the flash offers to restore.
+	Undo []string `json:"undo,omitempty"`
 }
+
+// maxUndoUIDs keeps the flash cookie well under the 4 KB browser limit.
+const maxUndoUIDs = 60
 
 func (s *Server) getFlash(w http.ResponseWriter, r *http.Request) *flashMessage {
 	c, err := r.Cookie("skarb_flash")
@@ -417,10 +470,21 @@ func newLoginLimiter() *loginLimiter {
 	return &loginLimiter{attempts: map[string][]time.Time{}}
 }
 
+// maxLimiterKeys bounds the limiter's memory: past it, keys with no recent
+// failures are swept on the next check.
+const maxLimiterKeys = 10000
+
 func (l *loginLimiter) allow(key string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	cutoff := time.Now().Add(-15 * time.Minute)
+	if len(l.attempts) > maxLimiterKeys {
+		for k, times := range l.attempts {
+			if len(times) == 0 || !times[len(times)-1].After(cutoff) {
+				delete(l.attempts, k)
+			}
+		}
+	}
 	var recent []time.Time
 	for _, t := range l.attempts[key] {
 		if t.After(cutoff) {
@@ -626,6 +690,7 @@ func (s *Server) templateFuncs() template.FuncMap {
 		},
 		"urlquery":  template.URLQueryEscaper,
 		"hasPrefix": strings.HasPrefix,
+		"hasSuffix": strings.HasSuffix,
 		// dict builds a map from key/value pairs so partials can take several arguments.
 		"dict": func(kv ...any) (map[string]any, error) {
 			if len(kv)%2 != 0 {

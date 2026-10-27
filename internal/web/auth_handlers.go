@@ -90,7 +90,7 @@ func (s *Server) ownPasswordChange(w http.ResponseWriter, r *http.Request) {
 	old := r.FormValue("old_password")
 	newPassword := r.FormValue("new_password")
 	if err := s.svc.ChangePassword(r.Context(), s.actor(r), old, newPassword); err != nil {
-		s.setFlash(w, "error", "Не вдалося змінити пароль: "+err.Error())
+		s.setFlash(w, "error", "Не вдалося змінити пароль: "+s.errText(r, err))
 		s.redirect(w, r, "/settings")
 		return
 	}
@@ -103,7 +103,7 @@ func (s *Server) ownTokenCreate(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.FormValue("name"))
 	plain, _, err := s.svc.CreateAPIToken(r.Context(), s.actor(r), s.apiTokenInputFromForm(r, name))
 	if err != nil {
-		s.setFlash(w, "error", "Не вдалося створити токен: "+err.Error())
+		s.setFlash(w, "error", "Не вдалося створити токен: "+s.errText(r, err))
 		s.redirect(w, r, "/settings")
 		return
 	}
@@ -114,7 +114,7 @@ func (s *Server) ownTokenCreate(w http.ResponseWriter, r *http.Request) {
 func (s *Server) ownTokenRevoke(w http.ResponseWriter, r *http.Request) {
 	uid := r.PathValue("uid")
 	if err := s.svc.RevokeAPIToken(r.Context(), s.actor(r), uid); err != nil {
-		s.setFlash(w, "error", "Не вдалося відкликати токен: "+err.Error())
+		s.setFlash(w, "error", "Не вдалося відкликати токен: "+s.errText(r, err))
 	} else {
 		s.setFlash(w, "success", "Токен відкликано.")
 	}

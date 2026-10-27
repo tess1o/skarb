@@ -1,0 +1,23 @@
+{{define "content"}}
+<div class="page-head"><div><h1>Більше</h1><p class="muted">{{.User.DisplayName}} · {{.User.Username}}</p></div></div>
+
+<nav class="card menu-list" aria-label="Інші розділи">
+  <a href="/snapshots">{{template "icon" "wallet"}}<span>Заощадження</span>{{template "icon" "chevron"}}</a>
+  <a href="/settings">{{template "icon" "user"}}<span>Мої налаштування</span>{{template "icon" "chevron"}}</a>
+</nav>
+
+{{if .IsAdmin}}
+<p class="label menu-group">Адміністрування</p>
+<nav class="card menu-list" aria-label="Адміністрування">
+  <a href="/admin/categories">{{template "icon" "tag"}}<span>Категорії</span>{{template "icon" "chevron"}}</a>
+  <a href="/admin/users">{{template "icon" "users"}}<span>Користувачі</span>{{template "icon" "chevron"}}</a>
+  <a href="/admin/settings">{{template "icon" "sliders"}}<span>Налаштування</span>{{template "icon" "chevron"}}</a>
+  <a href="/admin/audit">{{template "icon" "log"}}<span>Журнал дій</span>{{template "icon" "chevron"}}</a>
+</nav>
+{{end}}
+
+<form method="post" action="/logout" class="card menu-list">
+  <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+  <button type="submit" class="menu-logout">{{template "icon" "logout"}}<span>Вийти</span></button>
+</form>
+{{end}}

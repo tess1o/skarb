@@ -443,6 +443,10 @@ func (s *Service) MonthlySummary(ctx context.Context, actor domain.Actor, month 
 
 type DashboardData struct {
 	Today       domain.Date
+	Month       string // YYYY-MM being shown
+	PrevMonth   string // YYYY-MM of the month before
+	NextMonth   string // YYYY-MM of the month after; empty when Month is the current month
+	IsCurrent   bool
 	Period      domain.DateRange
 	Previous    domain.DateRange
 	Summary     *domain.Summary
@@ -455,9 +459,20 @@ type DashboardData struct {
 }
 
 func (s *Service) Dashboard(ctx context.Context, actor domain.Actor) (*DashboardData, error) {
+	return s.DashboardMonth(ctx, actor, "")
+}
+
+// DashboardMonth builds the overview for month (YYYY-MM). An empty, invalid or
+// future month shows the current month to date, compared with the same days of
+// the previous month; a past month is shown in full against the full month before.
+func (s *Service) DashboardMonth(ctx context.Context, actor domain.Actor, month string) (*DashboardData, error) {
 	today := s.Today()
 	mtd := MonthToDate(today)
 	prev := PreviousMonthSameDays(today)
+	current := true
+	if r, err := ParseMonth(month); err == nil && r.To.Before(CurrentMonth(today).From) {
+		mtd, prev, current = r, PreviousMonth(r), false
+	}
 	cur, err := s.Summary(ctx, actor, store.TransactionFilter{From: &mtd.From, To: &mtd.To})
 	if err != nil {
 		return nil, err
@@ -474,11 +489,16 @@ func (s *Service) Dashboard(ctx context.Context, actor domain.Actor) (*Dashboard
 	if err != nil {
 		return nil, err
 	}
-	nw, err := s.NetWorth(ctx, actor, today)
+	nw, err := s.NetWorth(ctx, actor, mtd.To)
 	if err != nil {
 		return nil, err
 	}
-	recent, err := s.RecentTransactions(ctx, actor, 10)
+	var recent []domain.Transaction
+	if current {
+		recent, err = s.RecentTransactions(ctx, actor, 10)
+	} else {
+		recent, err = s.Store.ListTransactions(ctx, store.TransactionFilter{From: &mtd.From, To: &mtd.To, Limit: 10})
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -491,8 +511,16 @@ func (s *Service) Dashboard(ctx context.Context, actor domain.Actor) (*Dashboard
 			trendMax = p.IncomeUAH
 		}
 	}
+	next := ""
+	if !current {
+		next = MonthRange(mtd.From.Year(), mtd.From.Month()+1).From.Format("2006-01")
+	}
 	return &DashboardData{
 		Today:       today,
+		Month:       mtd.From.Format("2006-01"),
+		PrevMonth:   prev.From.Format("2006-01"),
+		NextMonth:   next,
+		IsCurrent:   current,
 		Period:      mtd,
 		Previous:    prev,
 		Summary:     cur,

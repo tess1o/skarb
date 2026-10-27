@@ -1,16 +1,22 @@
-{{define "layout"}}
+{{define "layout" -}}
+{{/* The mobile bottom bar is hidden on forms, which have their own Save/Cancel. */ -}}
+{{$tabbar := and .User (not (or (eq .Path "/transactions/new") (hasSuffix .Path "/edit"))) -}}
+{{$more := or (eq .Path "/menu") (eq .Path "/snapshots") (hasPrefix .Path "/settings") (hasPrefix .Path "/admin") -}}
 <!doctype html>
 <html lang="uk">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#fffdf9" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#1c1f1b" media="(prefers-color-scheme: dark)">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#16191e" media="(prefers-color-scheme: dark)">
   <title>{{.Title}} · Skarb</title>
   <link rel="stylesheet" href="/static/app.css">
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/static/icon-180.png">
+  <link rel="manifest" href="/static/manifest.webmanifest">
   <script src="/static/app.js" defer></script>
 </head>
-<body>
+<body{{if $tabbar}} class="has-tabbar"{{end}}>
 <header class="topbar">
   <div class="container topbar-inner">
     <a class="brand" href="/">Skarb<span>·</span></a>
@@ -39,11 +45,30 @@
 </header>
 <main class="container">
   {{with .Flash}}
-  <div class="flash {{.Kind}}" role="status">{{.Message}}</div>
+  <div class="flash {{.Kind}}" role="status">
+    <span>{{.Message}}</span>
+    {{if .Undo}}
+    <form method="post" action="/transactions/restore" class="inline">
+      <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+      <input type="hidden" name="next" value="{{$.RequestURI}}">
+      {{range .Undo}}<input type="hidden" name="uid" value="{{.}}">{{end}}
+      <button class="button small" type="submit">Скасувати</button>
+    </form>
+    {{end}}
+  </div>
   {{end}}
   {{template "content" .}}
 </main>
 <footer class="container footer">Skarb · сімейний бюджет · {{.Year}}</footer>
+{{if $tabbar}}
+<nav class="tabbar" aria-label="Швидка навігація">
+  <a href="/"{{if eq .Path "/"}} class="active" aria-current="page"{{end}}>{{template "icon" "home"}}<span>Огляд</span></a>
+  <a href="/transactions"{{if hasPrefix .Path "/transactions"}} class="active" aria-current="page"{{end}}>{{template "icon" "list"}}<span>Транзакції</span></a>
+  <a href="/transactions/new" class="tabbar-add" aria-label="Нова транзакція"><span class="tabbar-fab">{{template "icon" "plus"}}</span></a>
+  <a href="/stats"{{if eq .Path "/stats"}} class="active" aria-current="page"{{end}}>{{template "icon" "chart"}}<span>Статистика</span></a>
+  <a href="/menu"{{if $more}} class="active"{{if eq .Path "/menu"}} aria-current="page"{{end}}{{end}}>{{template "icon" "menu"}}<span>Більше</span></a>
+</nav>
+{{end}}
 </body>
 </html>
 {{end}}

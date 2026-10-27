@@ -2,9 +2,17 @@
 <div class="page-head">
   <div>
     <h1>Огляд</h1>
-    <p class="muted">{{fmtMonth .Dashboard.Period.From}} · з {{fmtDate .Dashboard.Period.From}} по {{fmtDate .Dashboard.Period.To}}</p>
+    {{with .Dashboard}}
+    <nav class="month-nav" aria-label="Місяць">
+      <a class="button small" href="/?month={{.PrevMonth}}" aria-label="Попередній місяць" title="Попередній місяць">←</a>
+      <strong>{{fmtMonth .Period.From}}</strong>
+      {{if .NextMonth}}<a class="button small" href="/?month={{.NextMonth}}" aria-label="Наступний місяць" title="Наступний місяць">→</a>{{else}}<span class="button small" aria-disabled="true">→</span>{{end}}
+      {{if not .IsCurrent}}<a class="small" href="/">Поточний місяць</a>{{end}}
+    </nav>
+    <p class="muted small">з {{fmtDate .Period.From}} по {{fmtDate .Period.To}}</p>
+    {{end}}
   </div>
-  <div class="actions">
+  <div class="actions hide-with-tabbar">
     <a class="button primary" href="/transactions/new">+ Транзакція</a>
     <a class="button" href="/stats">Статистика</a>
   </div>
@@ -25,13 +33,13 @@
   <div class="card stat">
     <span class="label">Баланс</span>
     <strong class="value {{if lt .Summary.NetUAH 0}}expense{{else}}income{{end}}">{{fmtAmount .Summary.NetUAH "UAH"}}</strong>
-    <span class="muted small">попередній період: {{fmtAmount .PrevSummary.NetUAH "UAH"}}</span>
+    <span class="muted small">{{if .IsCurrent}}ті ж дні минулого місяця{{else}}{{fmtMonth .Previous.From}}{{end}}: {{fmtAmount .PrevSummary.NetUAH "UAH"}}</span>
   </div>
 </div>
 
 <div class="grid two">
   <section class="card">
-    <div class="card-head"><h2>Витрати за категоріями</h2><a href="/stats">Детальніше</a></div>
+    <div class="card-head"><h2>Витрати за категоріями</h2><a href="/stats?from={{.Period.From}}&to={{.Period.To}}">Детальніше</a></div>
     {{range .Categories}}
     <div class="bar-row">
       <div class="bar-label"><span class="cat-dot" style="background:{{.Color}}"></span>{{.Emoji}} {{.Name}}</div>
@@ -39,7 +47,7 @@
       <div class="bar-value">{{fmtAmount .AmountUAH "UAH"}} <span class="muted small">{{fmtPct .Percent}}%</span></div>
     </div>
     {{else}}
-    <p class="empty">Ще немає витрат цього місяця.</p>
+    <p class="empty">Немає витрат за цей місяць.</p>
     {{end}}
   </section>
 
@@ -70,7 +78,7 @@
 
 <div class="grid two">
   <section class="card">
-    <div class="card-head"><h2>Останні транзакції</h2><a href="/transactions">Усі</a></div>
+    <div class="card-head"><h2>{{if .IsCurrent}}Останні транзакції{{else}}Транзакції за місяць{{end}}</h2><a href="/transactions{{if not .IsCurrent}}?from={{.Period.From}}&to={{.Period.To}}{{end}}">Усі</a></div>
     <div class="table-wrap">
       <table class="compact tx">
         <thead><tr><th>Дата</th><th>Категорія</th><th>Опис</th><th class="num">Сума</th><th></th></tr></thead>

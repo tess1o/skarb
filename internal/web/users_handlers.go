@@ -11,7 +11,7 @@ import (
 func (s *Server) usersPage(w http.ResponseWriter, r *http.Request) {
 	users, err := s.svc.ListUsers(r.Context(), s.actor(r), true)
 	if err != nil {
-		s.renderError(w, r, http.StatusInternalServerError, err.Error())
+		s.renderError(w, r, http.StatusInternalServerError, s.errText(r, err))
 		return
 	}
 	s.render(w, r, "users.html", map[string]any{
@@ -29,7 +29,7 @@ func (s *Server) userCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	user, password, err := s.svc.CreateUser(r.Context(), s.actor(r), in)
 	if err != nil {
-		s.setFlash(w, "error", "Не вдалося створити користувача: "+err.Error())
+		s.setFlash(w, "error", "Не вдалося створити користувача: "+s.errText(r, err))
 		s.redirect(w, r, "/admin/users")
 		return
 	}
@@ -54,7 +54,7 @@ func (s *Server) userUpdate(w http.ResponseWriter, r *http.Request) {
 	uid := r.PathValue("uid")
 	if err := s.svc.UpdateUser(r.Context(), s.actor(r), uid,
 		r.FormValue("display_name"), parseOptionalInt64(r.FormValue("telegram_id"))); err != nil {
-		s.setFlash(w, "error", "Не вдалося оновити користувача: "+err.Error())
+		s.setFlash(w, "error", "Не вдалося оновити користувача: "+s.errText(r, err))
 	} else {
 		s.setFlash(w, "success", "Користувача оновлено.")
 	}
@@ -64,7 +64,7 @@ func (s *Server) userUpdate(w http.ResponseWriter, r *http.Request) {
 func (s *Server) userResetPassword(w http.ResponseWriter, r *http.Request) {
 	password, err := s.svc.ResetUserPassword(r.Context(), s.actor(r), r.PathValue("uid"))
 	if err != nil {
-		s.setFlash(w, "error", "Не вдалося скинути пароль: "+err.Error())
+		s.setFlash(w, "error", "Не вдалося скинути пароль: "+s.errText(r, err))
 	} else {
 		s.setFlash(w, "success", "Новий тимчасовий пароль: "+password)
 	}
@@ -74,7 +74,7 @@ func (s *Server) userResetPassword(w http.ResponseWriter, r *http.Request) {
 func (s *Server) userSetActive(w http.ResponseWriter, r *http.Request) {
 	active := r.FormValue("active") == "1"
 	if err := s.svc.SetUserActive(r.Context(), s.actor(r), r.PathValue("uid"), active); err != nil {
-		s.setFlash(w, "error", "Не вдалося змінити статус: "+err.Error())
+		s.setFlash(w, "error", "Не вдалося змінити статус: "+s.errText(r, err))
 	} else if active {
 		s.setFlash(w, "success", "Користувача активовано.")
 	} else {
@@ -85,7 +85,7 @@ func (s *Server) userSetActive(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) userDelete(w http.ResponseWriter, r *http.Request) {
 	if err := s.svc.SetUserActive(r.Context(), s.actor(r), r.PathValue("uid"), false); err != nil {
-		s.setFlash(w, "error", "Не вдалося видалити користувача: "+err.Error())
+		s.setFlash(w, "error", "Не вдалося видалити користувача: "+s.errText(r, err))
 	} else {
 		s.setFlash(w, "success", "Користувача видалено (деактивовано). Історія транзакцій збережена.")
 	}

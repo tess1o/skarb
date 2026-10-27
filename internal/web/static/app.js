@@ -59,3 +59,36 @@ document.addEventListener('DOMContentLoaded', function () {
   });
   update();
 });
+
+// Transaction form: the Витрата/Дохід toggle limits the category list to that
+// type. Options are rebuilt rather than hidden because iOS Safari ignores
+// hidden <option>s in its native picker. Without JS the grouped list remains.
+document.addEventListener('DOMContentLoaded', function () {
+  var toggle = document.querySelector('[data-kind-toggle]');
+  var select = document.querySelector('[data-category-select]');
+  if (!toggle || !select) return;
+  var placeholder = select.querySelector('option[value=""]');
+  var groups = {};
+  Array.prototype.forEach.call(select.querySelectorAll('optgroup'), function (g) {
+    groups[g.getAttribute('data-kind')] = Array.prototype.slice.call(g.children);
+  });
+
+  function show(kind) {
+    var current = select.value;
+    select.textContent = '';
+    select.appendChild(placeholder);
+    (groups[kind] || []).forEach(function (o) { select.appendChild(o); });
+    var keep = (groups[kind] || []).some(function (o) { return o.value === current; });
+    select.value = keep ? current : '';
+  }
+
+  toggle.hidden = false;
+  toggle.addEventListener('change', function (e) { show(e.target.value); });
+  show(toggle.querySelector('input:checked').value);
+});
+
+// Filters are always visible on wide screens; on phones they collapse.
+document.addEventListener('DOMContentLoaded', function () {
+  var box = document.querySelector('[data-filters]');
+  if (box && window.matchMedia('(min-width: 641px)').matches) box.open = true;
+});

@@ -1,21 +1,33 @@
 {{define "content"}}
 <div class="page-head"><div><h1>{{.Title}}</h1></div><a class="button" href="/transactions">← Назад</a></div>
 {{if .Error}}<div class="flash error">{{.Error}}</div>{{end}}
-<form class="card form-grid" method="post" action="{{.Action}}">
+<form class="card form-grid tx-form" method="post" action="{{.Action}}">
   <input type="hidden" name="csrf_token" value="{{.CSRF}}">
-  <label>Дата<input type="date" name="date" value="{{.Form.date}}" required></label>
-  <label>Сума<input name="amount" value="{{.Form.amount}}" inputmode="decimal" placeholder="512,00" required></label>
-  <label>Валюта
-    <select name="currency">
-      {{range .Currencies}}<option value="{{.}}" {{if eq . $.Form.currency}}selected{{end}}>{{.}}</option>{{end}}
-    </select>
-  </label>
+  <div class="span2 amount-row">
+    <label>Сума<input name="amount" value="{{.Form.amount}}" inputmode="decimal" enterkeyhint="next" placeholder="0,00" required {{if not .Transaction}}autofocus{{end}}></label>
+    <label>Валюта
+      <select name="currency">
+        {{range .Currencies}}<option value="{{.}}" {{if eq . $.Form.currency}}selected{{end}}>{{.}}</option>{{end}}
+      </select>
+    </label>
+  </div>
+  <fieldset class="span2 segmented" data-kind-toggle hidden>
+    <legend class="sr-only">Тип</legend>
+    <label><input type="radio" name="kind_ui" value="expense" {{if ne .Kind "income"}}checked{{end}}><span>Витрата</span></label>
+    <label><input type="radio" name="kind_ui" value="income" {{if eq .Kind "income"}}checked{{end}}><span>Дохід</span></label>
+  </fieldset>
   <label>Категорія
-    <select name="category" required>
+    <select name="category" required data-category-select>
       <option value="">Оберіть категорію</option>
-      {{range .Categories}}<option value="{{.ID}}" {{if eq (printf "%d" .ID) $.Form.category}}selected{{end}}>{{.Emoji}} {{.Name}} · {{kindLabel .Kind}}</option>{{end}}
+      <optgroup label="Витрати" data-kind="expense">
+        {{range .Expense}}<option value="{{.ID}}" {{if eq (printf "%d" .ID) $.Form.category}}selected{{end}}>{{.Emoji}} {{.Name}}</option>{{end}}
+      </optgroup>
+      <optgroup label="Доходи" data-kind="income">
+        {{range .Income}}<option value="{{.ID}}" {{if eq (printf "%d" .ID) $.Form.category}}selected{{end}}>{{.Emoji}} {{.Name}}</option>{{end}}
+      </optgroup>
     </select>
   </label>
+  <label>Дата<input type="date" name="date" value="{{.Form.date}}" required></label>
   {{if .IsAdmin}}
   <label>Власник
     <select name="owner">
@@ -26,9 +38,10 @@
   <input type="hidden" name="owner" value="{{.Form.owner}}">
   {{end}}
   <label class="span2">Опис<input name="description" value="{{.Form.description}}" placeholder="Наприклад, обід"></label>
-  <label class="span2">Нотатка<textarea name="note" rows="3" placeholder="Коментар до транзакції">{{.Form.note}}</textarea></label>
+  <label class="span2">Нотатка<textarea name="note" rows="2" placeholder="Коментар до транзакції">{{.Form.note}}</textarea></label>
   <div class="form-actions span2">
     <button class="primary" type="submit">Зберегти</button>
+    {{if not .Transaction}}<button type="submit" name="again" value="1">Зберегти й додати ще</button>{{end}}
     <a class="button" href="/transactions">Скасувати</a>
   </div>
 </form>

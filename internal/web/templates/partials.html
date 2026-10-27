@@ -14,8 +14,14 @@
   <td class="tx-amount num {{if eq (printf "%s" .Kind) "income"}}income{{else}}expense{{end}}">{{fmtAmount .AmountMinor .Currency}}</td>
   {{if not $.Compact}}<td class="tx-source"><span class="badge">{{sourceLabel .Source}}</span></td>{{end}}
   <td class="tx-actions">
-    {{if .Deleted}}<span class="badge danger">видалено</span>{{else}}
-    <form method="post" action="/transactions/{{.UID}}/delete" class="inline" data-confirm="Видалити транзакцію «{{default .Description .CategoryName}}» на {{fmtAmount .AmountMinor .Currency}}?">
+    {{if .Deleted}}
+    <form method="post" action="/transactions/restore" class="inline">
+      <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+      <input type="hidden" name="uid" value="{{.UID}}">
+      <input type="hidden" name="next" value="{{$.Next}}">
+      <button class="button small" type="submit">Відновити</button>
+    </form>{{else}}
+    <form method="post" action="/transactions/{{.UID}}/delete" class="inline">
       <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
       <input type="hidden" name="reason" value="web delete">
       <input type="hidden" name="next" value="{{$.Next}}">
@@ -29,3 +35,6 @@
 <tr><td colspan="{{if $.Compact}}5{{else if $.Select}}8{{else}}7{{end}}" class="empty">Немає транзакцій.</td></tr>
 {{end}}
 {{end}}
+
+{{/* icon renders a 24×24 stroke icon by name. */}}
+{{define "icon"}}<svg class="icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{if eq . "home"}}M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10{{else if eq . "list"}}M9 6h12M9 12h12M9 18h12M4 6h.01M4 12h.01M4 18h.01{{else if eq . "plus"}}M12 5v14M5 12h14{{else if eq . "chart"}}M3 20h18M6 20v-8M11 20V5M16 20v-11M21 20v-5{{else if eq . "menu"}}M4 6h16M4 12h16M4 18h16{{else if eq . "wallet"}}M4 7h15a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11v3M17 14h.01{{else if eq . "user"}}M20 21a8 8 0 0 0-16 0M12 13a4 4 0 1 0 0-8 4 4 0 0 0 0 8{{else if eq . "tag"}}M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8zM7.5 7.5h.01{{else if eq . "users"}}M16 21a6 6 0 0 0-12 0M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21a5 5 0 0 0-4-4.9M15 3.3a4 4 0 0 1 0 7.4{{else if eq . "sliders"}}M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M15 4v4M9 10v4M17 16v4{{else if eq . "log"}}M6 2h9l5 5v15H6zM14 2v6h6M9 13h7M9 17h7{{else if eq . "logout"}}M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l-5-5 5-5M5 12h11{{else if eq . "chevron"}}M9 6l6 6-6 6{{end}}"/></svg>{{end}}

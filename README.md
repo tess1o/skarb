@@ -223,7 +223,7 @@ Two configurable cron entries live in **Налаштування → Нагад�
 - **transactions** — default `0 10 * * 1` (Monday 10:00 Kyiv), window 7 days. Sends only when there are zero active transactions in the window.
 - **snapshot** — default `0 10 1 * *` (1st of the month, 10:00 Kyiv). Lists active accounts without a balance in the current month.
 
-Each has an enabled flag, timezone, target group, and optional target user. If no target is configured, the admin's Telegram DM is used. Changes reload the scheduler immediately. The **Тест** button sends a sample reminder to the acting admin's Telegram DM (link your Telegram user ID first). Missed runs while the container is down are not backfilled. The FX refresh and daily backup are internal jobs and are separate from these two user-configurable reminder crons.
+Each has an enabled flag, timezone, target group, and optional target user. If no target is configured, the admin's Telegram DM is used. Changes reload the scheduler immediately. The **Тест** button sends a sample reminder to the acting admin's Telegram DM (link your Telegram user ID first). Missed runs while the container is down are not backfilled. The FX refresh, daily backup and daily cleanup (03:30 Kyiv: expired sessions and pending Telegram edits, plus Telegram update IDs and MCP idempotency keys older than 30 days) are internal jobs and are separate from these two user-configurable reminder crons.
 
 ## Backup and restore
 

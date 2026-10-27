@@ -209,12 +209,12 @@ func TestDeleteTransactionsBulk(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Duplicates are ignored and the already-deleted row is skipped.
-	n, err := svc.DeleteTransactions(ctx, actor, []string{uids[0], uids[1], uids[1], uids[2]}, "bulk")
+	deleted, err := svc.DeleteTransactions(ctx, actor, []string{uids[0], uids[1], uids[1], uids[2]}, "bulk")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 2 {
-		t.Fatalf("deleted = %d, want 2", n)
+	if len(deleted) != 2 || deleted[0] != uids[0] || deleted[1] != uids[1] {
+		t.Fatalf("deleted = %v, want %v", deleted, uids[:2])
 	}
 	for _, uid := range uids {
 		if tx, _ := svc.GetTransaction(ctx, actor, uid); !tx.Deleted() {

@@ -12,7 +12,7 @@ func (s *Server) categoriesPage(w http.ResponseWriter, r *http.Request) {
 	actor := s.actor(r)
 	categories, err := s.svc.ListCategories(r.Context(), actor, true)
 	if err != nil {
-		s.renderError(w, r, http.StatusInternalServerError, err.Error())
+		s.renderError(w, r, http.StatusInternalServerError, s.errText(r, err))
 		return
 	}
 	s.render(w, r, "categories.html", map[string]any{
@@ -31,7 +31,7 @@ func (s *Server) categoryCreate(w http.ResponseWriter, r *http.Request) {
 		Aliases:   splitAliases(r.FormValue("aliases")),
 	}
 	if _, err := s.svc.CreateCategory(r.Context(), s.actor(r), in); err != nil {
-		s.setFlash(w, "error", "Не вдалося створити категорію: "+err.Error())
+		s.setFlash(w, "error", "Не вдалося створити категорію: "+s.errText(r, err))
 	} else {
 		s.setFlash(w, "success", "Категорію створено.")
 	}
@@ -67,7 +67,7 @@ func (s *Server) categoryUpdate(w http.ResponseWriter, r *http.Request) {
 		Aliases:   &aliases,
 	}
 	if _, err := s.svc.UpdateCategory(r.Context(), s.actor(r), uid, in); err != nil {
-		s.setFlash(w, "error", "Не вдалося оновити категорію: "+err.Error())
+		s.setFlash(w, "error", "Не вдалося оновити категорію: "+s.errText(r, err))
 	} else {
 		s.setFlash(w, "success", "Категорію оновлено.")
 	}
@@ -77,7 +77,7 @@ func (s *Server) categoryUpdate(w http.ResponseWriter, r *http.Request) {
 func (s *Server) categoryArchive(w http.ResponseWriter, r *http.Request) {
 	archived := r.FormValue("archived") == "1"
 	if err := s.svc.ArchiveCategory(r.Context(), s.actor(r), r.PathValue("uid"), archived); err != nil {
-		s.setFlash(w, "error", "Не вдалося змінити архів: "+err.Error())
+		s.setFlash(w, "error", "Не вдалося змінити архів: "+s.errText(r, err))
 	} else if archived {
 		s.setFlash(w, "success", "Категорію архівовано.")
 	} else {
@@ -88,7 +88,7 @@ func (s *Server) categoryArchive(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) categoryDelete(w http.ResponseWriter, r *http.Request) {
 	if err := s.svc.DeleteCategory(r.Context(), s.actor(r), r.PathValue("uid"), r.FormValue("reassign_to")); err != nil {
-		s.setFlash(w, "error", "Не вдалося видалити категорію: "+err.Error())
+		s.setFlash(w, "error", "Не вдалося видалити категорію: "+s.errText(r, err))
 	} else {
 		s.setFlash(w, "success", "Категорію видалено.")
 	}

@@ -55,6 +55,14 @@ func (s *Scheduler) Start(ctx context.Context) {
 			s.log.Warn("daily backup failed", "error", err)
 		}
 	})
+	s.addFixed(ctx, "cleanup", "30 3 * * *", func() {
+		removed, err := s.svc.Store.PurgeStale(context.Background(), time.Now())
+		if err != nil {
+			s.log.Warn("daily cleanup failed", "error", err)
+			return
+		}
+		s.log.Info("daily cleanup", "removed", removed)
+	})
 	s.mu.Lock()
 	s.cron.Start()
 	s.mu.Unlock()

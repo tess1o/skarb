@@ -98,14 +98,6 @@ func (s *Store) RevokeUserSessions(ctx context.Context, userID int64) error {
 	return err
 }
 
-func (s *Store) DeleteExpiredSessions(ctx context.Context, before time.Time) error {
-	_, err := s.DB.ExecContext(ctx,
-		`DELETE FROM sessions WHERE expires_at < ? OR revoked_at IS NOT NULL`,
-		before.UTC().Format(time.RFC3339Nano),
-	)
-	return err
-}
-
 type CreateAPITokenInput struct {
 	TokenHash   string
 	TokenPrefix string
