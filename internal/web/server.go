@@ -600,8 +600,8 @@ func (s *Server) templateFuncs() template.FuncMap {
 		"plainAmount": func(minor int64, currency string) string {
 			return money.PlainAmount(minor, money.MinorUnits(currency))
 		},
-		"fmtRate":   func(scaled int64) string { return money.FormatRate(scaled) },
-		"fmtDate":   func(d domain.Date) string { return d.Format("02.01.2006") },
+		"fmtRate": func(scaled int64) string { return money.FormatRate(scaled) },
+		"fmtDate": func(d domain.Date) string { return d.Format("02.01.2006") },
 		"derefInt64": func(p *int64) int64 {
 			if p == nil {
 				return 0
