@@ -14,6 +14,7 @@ import (
 	"time"
 
 	tgbot "github.com/go-telegram/bot"
+	"github.com/go-telegram/bot/models"
 	"skarb/internal/agent"
 	"skarb/internal/config"
 	"skarb/internal/domain"
@@ -351,6 +352,56 @@ func TestGroupQuickCaptureDoesNotCallLLM(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("mention called LLM %d times, want 1", calls)
+	}
+}
+
+func TestGroupAllMessagesUsesToolMode(t *testing.T) {
+	calls := 0
+	base := fixedDecision("stats_summary", map[string]any{
+		"from": "2026-10-01", "to": "2026-10-31",
+	})
+	env := newToolTestEnv(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		base(w, r)
+	}))
+	if err := env.st.AddTelegramChat(env.ctx, 456, "Family", "supergroup", &env.admin.ID); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := env.svc.GetLLMConfig(env.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.ListenAllGroupMessages = true
+	if err := env.svc.SetLLMConfig(env.ctx, env.svc.ActorForUser(env.admin, domain.SourceWeb), cfg); err != nil {
+		t.Fatal(err)
+	}
+	env.seedTransactions(t, 1)
+
+	env.addUpdate(messageUpdate(1, 456, "supergroup", 123, "скільки витратили за жовтень"))
+	sent := env.waitSent(t, 1)[0]
+	if text, _ := sent["text"].(string); !strings.Contains(text, "Підсумок") {
+		t.Fatalf("unexpected result: %s", text)
+	}
+	if calls != 1 {
+		t.Fatalf("unaddressed group message called LLM %d times, want 1", calls)
+	}
+}
+
+func TestUnaddressedGroupNoopStaysSilent(t *testing.T) {
+	env := newToolTestEnv(t, fixedDecision("noop", map[string]any{}))
+	msg := &models.Message{
+		Chat: models.Chat{ID: 456, Type: models.ChatTypeSupergroup},
+		From: &models.User{ID: 123}, Text: "звичайна розмова",
+	}
+	handled, err := env.bot.handleToolMessage(env.ctx, msg, env.admin,
+		env.svc.ActorForUser(env.admin, domain.SourceTelegram), msg.Text)
+	if err != nil || !handled {
+		t.Fatalf("handled = %v, err = %v", handled, err)
+	}
+	env.fake.mu.Lock()
+	defer env.fake.mu.Unlock()
+	if len(env.fake.sent) != 0 {
+		t.Fatalf("noop sent %d messages, want none", len(env.fake.sent))
 	}
 }
 

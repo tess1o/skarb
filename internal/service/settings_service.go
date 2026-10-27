@@ -16,14 +16,15 @@ import (
 const llmSettingKey = "llm.config"
 
 type LLMConfig struct {
-	BaseURL         string  `json:"base_url"`
-	Model           string  `json:"model"`
-	SchemaMode      string  `json:"schema_mode"`
-	TimeoutSeconds  int     `json:"timeout_seconds"`
-	MaxOutputTokens int     `json:"max_output_tokens"`
-	MaxTransactions int     `json:"max_transactions"`
-	MaxInputChars   int     `json:"max_input_chars"`
-	Temperature     float64 `json:"temperature"`
+	BaseURL                string  `json:"base_url"`
+	Model                  string  `json:"model"`
+	SchemaMode             string  `json:"schema_mode"`
+	TimeoutSeconds         int     `json:"timeout_seconds"`
+	MaxOutputTokens        int     `json:"max_output_tokens"`
+	MaxTransactions        int     `json:"max_transactions"`
+	MaxInputChars          int     `json:"max_input_chars"`
+	Temperature            float64 `json:"temperature"`
+	ListenAllGroupMessages bool    `json:"listen_all_group_messages"`
 }
 
 func DefaultLLMConfig() LLMConfig {

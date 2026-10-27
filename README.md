@@ -22,7 +22,7 @@ Backend: Go + SQLite. Deployment: one Docker container. No Node build step, no e
 - Both users can view everything and edit/delete any transaction in web/MCP.
 - Only the admin can manage categories, savings accounts/snapshots, users, settings, and FX overrides.
 - Income + expenses, multiple currencies, UAH base currency, Europe/Kyiv dates.
-- Telegram allowlisted group + linked-user DMs; per-transaction Undo/Comment/Category; natural-language stats; full MCP tool mode in DMs and on @mention/reply.
+- Telegram allowlisted group + linked-user DMs; per-transaction Undo/Comment/Category; natural-language stats; full MCP tool mode in DMs and on @mention/reply or, optionally, every group message.
 - OpenAI-compatible LLM parser with strict JSON validation, one repair attempt, and a deterministic regex fallback.
 - MCP over stateless streamable HTTP + a stdio bridge for Claude Desktop.
 - Admin-configurable Telegram chat allowlist, LLM settings, two reminder crons, FX refresh/override, MCP tokens.
@@ -74,7 +74,8 @@ Commands:
 ```
 
 In a private chat, or in a group when the bot is @mentioned or you reply to one of its
-messages, the bot can call the same tools as the MCP server:
+messages, the bot can call the same tools as the MCP server. An admin can change
+**Налаштування → ШІ-парсер → ШІ в групах** to process every group message instead:
 
 ```text
 покажи всі транзакції за жовтень
@@ -88,8 +89,9 @@ The LLM chooses one tool and returns JSON arguments; Go validates them against t
 schema, executes the tool in-process with `source=telegram`, and formats the result.
 Destructive actions show a confirmation card first. Long lists are paginated with «Ще».
 In a group without a mention, simple captures such as `512 грн за їжу` still go through
-the deterministic parser and do not call the LLM. Set `SKARB_TELEGRAM_TOOL_MODE=false`
-to disable full tool mode.
+the deterministic parser and do not call the LLM in the default mode. In the all-messages
+mode, unrelated chatter is classified by the LLM but receives no bot reply. Set
+`SKARB_TELEGRAM_TOOL_MODE=false` to disable full tool mode.
 
 The confirmation list has one row of buttons per transaction: `↩ Скасувати N`, `✏️ Коментар N` and `🏷 Категорія N`. Clicking **Коментар** sends a ForceReply prompt; reply with the new comment. Clicking **Категорія** turns the confirmation into a picker of active categories of the same kind (`← Назад` returns without changes). In both cases Skarb soft-deletes the old row and creates a linked replacement; **Undo** on the replacement restores the original.
 

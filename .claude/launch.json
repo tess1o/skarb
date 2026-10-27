@@ -1,0 +1,20 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "skarb-dev",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "SKARB_DATA_DIR=/private/tmp/claude-501/-Users-tessio-DevProjects-money-tracker/dec8b97a-c935-416b-a3f4-82d4759dc5b0/scratchpad/data",
+        "SKARB_HTTP_ADDR=127.0.0.1:8098",
+        "SKARB_PUBLIC_BASE_URL=http://127.0.0.1:8098",
+        "SKARB_ADMIN_USERNAME=admin",
+        "SKARB_ADMIN_PASSWORD=adminpassword123",
+        "SKARB_SESSION_SECRET=dev-secret-at-least-32-characters",
+        "SKARB_FX_BACKFILL_DAYS=0",
+        "go", "run", "./cmd/skarb", "serve"
+      ],
+      "port": 8098
+    }
+  ]
+}

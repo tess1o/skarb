@@ -56,14 +56,15 @@ func (s *Server) adminSettingsPage(w http.ResponseWriter, r *http.Request) {
 func (s *Server) adminLLMUpdate(w http.ResponseWriter, r *http.Request) {
 	temp, _ := strconv.ParseFloat(strings.ReplaceAll(r.FormValue("temperature"), ",", "."), 64)
 	cfg := service.LLMConfig{
-		BaseURL:         r.FormValue("base_url"),
-		Model:           r.FormValue("model"),
-		SchemaMode:      r.FormValue("schema_mode"),
-		TimeoutSeconds:  atoiDefault(r.FormValue("timeout_seconds"), 15),
-		MaxOutputTokens: atoiDefault(r.FormValue("max_output_tokens"), 800),
-		MaxTransactions: atoiDefault(r.FormValue("max_transactions"), 10),
-		MaxInputChars:   atoiDefault(r.FormValue("max_input_chars"), 2000),
-		Temperature:     temp,
+		BaseURL:                r.FormValue("base_url"),
+		Model:                  r.FormValue("model"),
+		SchemaMode:             r.FormValue("schema_mode"),
+		TimeoutSeconds:         atoiDefault(r.FormValue("timeout_seconds"), 15),
+		MaxOutputTokens:        atoiDefault(r.FormValue("max_output_tokens"), 800),
+		MaxTransactions:        atoiDefault(r.FormValue("max_transactions"), 10),
+		MaxInputChars:          atoiDefault(r.FormValue("max_input_chars"), 2000),
+		Temperature:            temp,
+		ListenAllGroupMessages: r.FormValue("listen_all_group_messages") == "1",
 	}
 	if err := s.svc.SetLLMConfig(r.Context(), s.actor(r), cfg); err != nil {
 		s.setFlash(w, "error", "Не вдалося зберегти налаштування ШІ: "+s.errText(r, err))

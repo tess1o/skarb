@@ -3,7 +3,7 @@
 
 <section class="card">
   <div class="card-head"><h2>ШІ-парсер</h2><span>{{if .LLMConfigured}}<span class="badge success">підключено</span>{{else}}<span class="badge">не налаштовано</span>{{end}} {{if .LLMKeySet}}<span class="badge success">ключ є</span>{{else}}<span class="badge danger">немає ключа</span>{{end}}</span></div>
-  <p class="muted small">Сумісний з OpenAI endpoint. Ключ задається лише через <code>SKARB_LLM_API_KEY</code>. Без ШІ працює детермінований парсер. У приватному чаті або за @згадкою/reply бот може виконувати MCP-інструменти; результати форматує Go.</p>
+  <p class="muted small">Сумісний з OpenAI endpoint. Ключ задається лише через <code>SKARB_LLM_API_KEY</code>. Без ШІ працює детермінований парсер. У приватному чаті, за @згадкою/reply або для всіх групових повідомлень у відповідному режимі бот може виконувати MCP-інструменти; результати форматує Go.</p>
   <form method="post" action="/admin/settings/llm" class="form-grid">
     <input type="hidden" name="csrf_token" value="{{.CSRF}}">
     <label class="span2">Base URL<input name="base_url" value="{{.LLM.BaseURL}}" placeholder="https://api.openai.com/v1"></label>
@@ -19,6 +19,10 @@
     <label>Макс. транзакцій<input type="number" name="max_transactions" value="{{.LLM.MaxTransactions}}" min="1" max="20"></label>
     <label>Макс. символів<input type="number" name="max_input_chars" value="{{.LLM.MaxInputChars}}" min="100" max="10000"></label>
     <label>Температура<input name="temperature" value="{{.LLM.Temperature}}" inputmode="decimal"></label>
+    <label>ШІ в групах<select name="listen_all_group_messages">
+      <option value="0" {{if not .LLM.ListenAllGroupMessages}}selected{{end}}>Лише @згадки та відповіді</option>
+      <option value="1" {{if .LLM.ListenAllGroupMessages}}selected{{end}}>Усі повідомлення</option>
+    </select></label>
     <div class="form-actions span2">
       <button class="primary" type="submit">Зберегти ШІ</button>
       <span class="muted small">Збережіть налаштування, потім перевірте з'єднання.</span>

@@ -205,6 +205,29 @@ func TestMemberIsForbiddenFromAdminRoutes(t *testing.T) {
 	}
 }
 
+func TestAdminCanEnableLLMForAllGroupMessages(t *testing.T) {
+	app := newTestApp(t)
+	rec := app.do(&app.admin, http.MethodPost, "/admin/settings/llm", url.Values{
+		"schema_mode":               {"auto"},
+		"timeout_seconds":           {"15"},
+		"max_output_tokens":         {"800"},
+		"max_transactions":          {"10"},
+		"max_input_chars":           {"2000"},
+		"temperature":               {"0.1"},
+		"listen_all_group_messages": {"1"},
+	})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303", rec.Code)
+	}
+	cfg, err := app.svc.GetLLMConfig(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.ListenAllGroupMessages {
+		t.Fatal("all-group-messages setting was not saved")
+	}
+}
+
 func TestDeleteRedirectsBackAndOffersUndo(t *testing.T) {
 	app := newTestApp(t)
 	tx := app.addExpense(app.member.actor, "coffee")

@@ -61,6 +61,9 @@ func (b *Bot) handleToolMessage(ctx context.Context, msg *models.Message, user *
 				return used, fallbackErr
 			}
 		}
+		if msg.Chat.Type != models.ChatTypePrivate && !b.isAddressedToBot(msg) {
+			return true, nil
+		}
 		return true, b.reply(ctx, chatID, "Не зрозумів. Напишіть, наприклад: «покажи всі транзакції за жовтень».", nil)
 	}
 

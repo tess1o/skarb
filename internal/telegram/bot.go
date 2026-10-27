@@ -315,7 +315,7 @@ func (b *Bot) processMessage(ctx context.Context, msg *models.Message) error {
 	}
 
 	if b.toolMode {
-		if b.isAddressedToBot(msg) {
+		if b.isAddressedToBot(msg) || b.listenToAllGroupMessages(ctx, msg) {
 			clean := b.stripBotMention(text)
 			if clean == "" {
 				return b.reply(ctx, chatID, helpText(), nil)
@@ -403,10 +403,18 @@ func (b *Bot) shouldParse(ctx context.Context, msg *models.Message, text string)
 	if nlu.LooksFinancial(text) {
 		return true
 	}
-	if !strings.ContainsAny(text, "0123456789") || !b.isAddressedToBot(msg) {
+	if !b.listenToAllGroupMessages(ctx, msg) && (!strings.ContainsAny(text, "0123456789") || !b.isAddressedToBot(msg)) {
 		return false
 	}
 	return b.llmConfigured(ctx)
+}
+
+func (b *Bot) listenToAllGroupMessages(ctx context.Context, msg *models.Message) bool {
+	if msg == nil || (msg.Chat.Type != models.ChatTypeGroup && msg.Chat.Type != models.ChatTypeSupergroup) {
+		return false
+	}
+	cfg, err := b.svc.GetLLMConfig(ctx)
+	return err == nil && cfg.ListenAllGroupMessages
 }
 
 func (b *Bot) llmConfigured(ctx context.Context) bool {
