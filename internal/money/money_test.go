@@ -48,6 +48,16 @@ func TestConvertToUAH(t *testing.T) {
 	}
 }
 
+func TestConvertFromUAH(t *testing.T) {
+	got, err := ConvertFromUAH(4_500_00, "USD", 45_00000000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != 100_00 {
+		t.Fatalf("got %d, want 10000", got)
+	}
+}
+
 func TestParseRate(t *testing.T) {
 	for _, raw := range []string{"45.2021", "45,2021", "45.2021 UAH"} {
 		got, err := ParseRate(raw)

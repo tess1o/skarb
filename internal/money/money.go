@@ -151,6 +151,35 @@ func ConvertToUAH(amountMinor int64, currency string, rateScaled int64) (int64, 
 	return q.Int64(), nil
 }
 
+// ConvertFromUAH converts UAH minor units to another currency's minor units.
+func ConvertFromUAH(amountMinor int64, currency string, rateScaled int64) (int64, error) {
+	c, err := CurrencyFor(currency)
+	if err != nil {
+		return 0, err
+	}
+	if amountMinor < 0 {
+		return 0, fmt.Errorf("negative amounts are not supported")
+	}
+	if rateScaled <= 0 {
+		return 0, fmt.Errorf("rate must be greater than zero")
+	}
+	if c.Code == "UAH" {
+		return amountMinor, nil
+	}
+
+	exp := RateScale + c.MinorUnits - 2
+	num := new(big.Int).Mul(big.NewInt(amountMinor), new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(exp)), nil))
+	den := big.NewInt(rateScaled)
+	q, r := new(big.Int).QuoRem(num, den, new(big.Int))
+	if new(big.Int).Lsh(r, 1).Cmp(den) >= 0 {
+		q.Add(q, big.NewInt(1))
+	}
+	if !q.IsInt64() {
+		return 0, fmt.Errorf("converted amount overflows int64")
+	}
+	return q.Int64(), nil
+}
+
 // FormatAmount renders minor units in Ukrainian style, e.g. 1 234,56 ₴ or 1 234,56 USD.
 func FormatAmount(minor int64, currency string) string {
 	c, err := CurrencyFor(currency)

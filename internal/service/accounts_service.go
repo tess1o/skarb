@@ -36,6 +36,16 @@ type UpsertSnapshotInput struct {
 	Note       string
 }
 
+type SaveSnapshotInput struct {
+	Date     string
+	Balances []SnapshotBalanceInput
+}
+
+type SnapshotBalanceInput struct {
+	AccountUID string
+	Amount     string
+}
+
 func (s *Service) ListAccounts(ctx context.Context, actor domain.Actor, includeArchived bool) ([]domain.Account, error) {
 	if err := s.RequireAuth(actor); err != nil {
 		return nil, err
@@ -159,15 +169,9 @@ func (s *Service) UpsertSnapshot(ctx context.Context, actor domain.Actor, in Ups
 	if account.Archived() {
 		return nil, validation("account", "account is archived")
 	}
-	date, err := parseFlexibleDate(in.Date)
+	date, err := s.snapshotDate(in.Date)
 	if err != nil {
-		return nil, validation("date", err.Error())
-	}
-	if date.IsZero() {
-		date = s.Today()
-	}
-	if date.Before(domain.NewDate(2000, 1, 1)) || date.After(s.Today().AddDays(1)) {
-		return nil, validation("date", "date is outside the allowed range")
+		return nil, err
 	}
 	balance, err := money.ParseBalance(in.Amount, account.Currency)
 	if err != nil {
@@ -198,6 +202,75 @@ func (s *Service) UpsertSnapshot(ctx context.Context, actor domain.Actor, in Ups
 		return nil, err
 	}
 	return snap, nil
+}
+
+// SaveSnapshot atomically records one dated balance for every active account.
+func (s *Service) SaveSnapshot(ctx context.Context, actor domain.Actor, in SaveSnapshotInput) error {
+	if err := s.RequireAdmin(actor); err != nil {
+		return err
+	}
+	date, err := s.snapshotDate(in.Date)
+	if err != nil {
+		return err
+	}
+	accounts, err := s.Store.ListAccounts(ctx, false)
+	if err != nil {
+		return err
+	}
+	if len(accounts) == 0 {
+		return validation("accounts", "create an account first")
+	}
+	byUID := make(map[string]domain.Account, len(accounts))
+	for _, account := range accounts {
+		byUID[account.UID] = account
+	}
+	type balance struct {
+		account domain.Account
+		minor   int64
+	}
+	balances := make([]balance, 0, len(in.Balances))
+	seen := make(map[string]bool, len(in.Balances))
+	for _, item := range in.Balances {
+		account, ok := byUID[item.AccountUID]
+		if !ok || seen[item.AccountUID] {
+			return validation("account", "invalid or duplicate account")
+		}
+		minor, err := money.ParseBalance(item.Amount, account.Currency)
+		if err != nil {
+			return validation("amount", account.Name+": "+err.Error())
+		}
+		seen[item.AccountUID] = true
+		balances = append(balances, balance{account: account, minor: minor})
+	}
+	if len(seen) != len(accounts) {
+		return validation("accounts", "enter a balance for every active account")
+	}
+	return s.withTx(ctx, func(tx *sql.Tx) error {
+		for _, item := range balances {
+			if _, err := s.Store.UpsertSnapshot(ctx, tx, store.SnapshotInput{
+				AccountID: item.account.ID, SnapshotDate: date, BalanceMinor: item.minor,
+				CreatedByUserID: actorPtr(actor.UserID), UpdatedByUserID: actorPtr(actor.UserID),
+			}); err != nil {
+				return err
+			}
+		}
+		return s.audit(ctx, tx, actor, "snapshot.saved", "snapshot", date.String(), nil,
+			map[string]any{"date": date.String(), "accounts": len(balances)})
+	})
+}
+
+func (s *Service) snapshotDate(raw string) (domain.Date, error) {
+	date, err := parseFlexibleDate(raw)
+	if err != nil {
+		return domain.Date{}, validation("date", err.Error())
+	}
+	if date.IsZero() {
+		date = s.Today()
+	}
+	if date.Before(domain.NewDate(2000, 1, 1)) || date.After(s.Today().AddDays(1)) {
+		return domain.Date{}, validation("date", "date is outside the allowed range")
+	}
+	return date, nil
 }
 
 func (s *Service) ListSnapshots(ctx context.Context, actor domain.Actor, accountUID string, from, to *domain.Date) ([]domain.Snapshot, error) {

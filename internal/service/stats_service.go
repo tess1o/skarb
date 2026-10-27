@@ -432,6 +432,38 @@ func (s *Service) SavingsHistory(ctx context.Context, actor domain.Actor, from, 
 	return out, nil
 }
 
+// SnapshotHistory returns the latest complete saved positions, not calendar buckets.
+func (s *Service) SnapshotHistory(ctx context.Context, actor domain.Actor, limit int) ([]domain.SavingsPoint, error) {
+	if err := s.RequireAuth(actor); err != nil {
+		return nil, err
+	}
+	if limit <= 0 || limit > 120 {
+		limit = 12
+	}
+	dates, err := s.Store.ListCompleteSnapshotDates(ctx, limit)
+	if err != nil {
+		return nil, err
+	}
+	var out []domain.SavingsPoint
+	var prev int64
+	for i := len(dates) - 1; i >= 0; i-- {
+		nw, err := s.NetWorth(ctx, actor, dates[i])
+		if err != nil {
+			return nil, err
+		}
+		point := domain.SavingsPoint{Date: dates[i], TotalUAH: nw.TotalUAH, MissingRate: len(nw.MissingRate)}
+		if len(out) > 0 {
+			point.DeltaUAH = nw.TotalUAH - prev
+			if prev != 0 {
+				point.Pct = float64(point.DeltaUAH) / float64(prev) * 100
+			}
+		}
+		prev = nw.TotalUAH
+		out = append(out, point)
+	}
+	return out, nil
+}
+
 func (s *Service) MonthlySummary(ctx context.Context, actor domain.Actor, month string) (*domain.Summary, domain.DateRange, error) {
 	r, err := ParseMonth(month)
 	if err != nil {

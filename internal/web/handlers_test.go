@@ -228,6 +228,39 @@ func TestAdminCanEnableLLMForAllGroupMessages(t *testing.T) {
 	}
 }
 
+func TestAdminSavesAllBalancesAsOneSnapshot(t *testing.T) {
+	app := newTestApp(t)
+	ctx := context.Background()
+	first, err := app.svc.CreateAccount(ctx, app.admin.actor, service.CreateAccountInput{
+		OwnerUserID: app.admin.actor.UserID, Name: "Cash", Currency: "UAH", Kind: domain.AccountCash, IncludeInNetWorth: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := app.svc.CreateAccount(ctx, app.admin.actor, service.CreateAccountInput{
+		OwnerUserID: app.admin.actor.UserID, Name: "Bank", Currency: "EUR", Kind: domain.AccountBank, IncludeInNetWorth: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := app.do(&app.admin, http.MethodGet, "/snapshots", nil)
+	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), "Новий знімок") || !strings.Contains(page.Body.String(), second.Name) {
+		t.Fatalf("snapshot page did not render the batch form: status=%d", page.Code)
+	}
+	rec := app.do(&app.admin, http.MethodPost, "/snapshots/upsert", url.Values{
+		"date": {"2026-10-26"}, "account": {first.UID, second.UID}, "amount": {"1000", "20"}, "currency": {"UAH"},
+	})
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/snapshots?currency=UAH" {
+		t.Fatalf("response = %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+	for _, account := range []*domain.Account{first, second} {
+		rows, err := app.svc.ListSnapshots(ctx, app.admin.actor, account.UID, nil, nil)
+		if err != nil || len(rows) != 1 {
+			t.Fatalf("%s snapshots = %+v, err=%v", account.Name, rows, err)
+		}
+	}
+}
+
 func TestDeleteRedirectsBackAndOffersUndo(t *testing.T) {
 	app := newTestApp(t)
 	tx := app.addExpense(app.member.actor, "coffee")

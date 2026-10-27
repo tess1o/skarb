@@ -210,9 +210,10 @@ Amounts are decimal strings, dates are `YYYY-MM-DD`, currencies are ISO 4217. Mu
 
 ## Savings snapshots and FX
 
-Create accounts in **Заощадження** (e.g. `bank1` for one spouse, `bank2` for the other, `cash`, `investment`). Each account has an owner and a currency. Add dated balances; the latest balance per active account is the current savings position.
+Create accounts in **Заощадження** (e.g. `bank1` for one spouse, `bank2` for the other, `cash`, `investment`). Each account has an owner and a currency. Update every balance in the **Новий знімок** form and save them together; the latest snapshot is the current savings position, and the trend compares complete snapshots rather than calendar months.
 
 - Transfers between accounts are not tracked. Snapshots answer “how much do we have now?”; transactions answer “where did money go?”.
+- The savings page shows native totals per currency and can convert the combined total to any supported currency.
 - Rates come from the NBU daily API (`bank.gov.ua`). The app refreshes at ~16:10 Kyiv, on startup, and on demand. Historical rates are fetched when needed; a 730-day backfill runs at startup.
 - Stats convert foreign transactions at the transaction-date rate (or the nearest prior business day). Net worth converts snapshots at the requested date's rate.
 - Admins can manually override a rate in **Налаштування → Курси NBU**. Manual overrides are not overwritten by the daily NBU job.

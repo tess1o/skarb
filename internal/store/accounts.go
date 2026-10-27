@@ -356,6 +356,51 @@ func (s *Store) ListSnapshots(ctx context.Context, accountID int64, from, to *do
 	return out, rows.Err()
 }
 
+// ListCompleteSnapshotDates returns dates that contain balances for every
+// active net-worth account whose snapshot history had started by that date.
+func (s *Store) ListCompleteSnapshotDates(ctx context.Context, limit int) ([]domain.Date, error) {
+	if limit <= 0 {
+		limit = 12
+	}
+	rows, err := s.DB.QueryContext(ctx, `
+		SELECT s.snapshot_date
+		FROM account_snapshots s
+		JOIN accounts a ON a.id = s.account_id
+		WHERE s.deleted_at IS NULL AND a.archived_at IS NULL AND a.include_in_net_worth = 1
+		GROUP BY s.snapshot_date
+		HAVING max(s.balance_minor) > 0
+		  AND count(DISTINCT s.account_id) = (
+			SELECT count(*) FROM accounts expected
+			WHERE expected.archived_at IS NULL
+			  AND expected.include_in_net_worth = 1
+			  AND EXISTS (
+				SELECT 1 FROM account_snapshots earlier
+				WHERE earlier.account_id = expected.id
+				  AND earlier.deleted_at IS NULL
+				  AND earlier.snapshot_date <= s.snapshot_date
+			  )
+		)
+		ORDER BY s.snapshot_date DESC
+		LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var dates []domain.Date
+	for rows.Next() {
+		var raw string
+		if err := rows.Scan(&raw); err != nil {
+			return nil, err
+		}
+		d, err := domain.ParseDate(raw)
+		if err != nil {
+			return nil, err
+		}
+		dates = append(dates, d)
+	}
+	return dates, rows.Err()
+}
+
 func (s *Store) SoftDeleteSnapshot(ctx context.Context, q DBTX, id, byUserID int64) error {
 	res, err := s.q(q).ExecContext(ctx,
 		`UPDATE account_snapshots SET deleted_at = ?, deleted_by_user_id = ?, updated_at = ?

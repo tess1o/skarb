@@ -7,7 +7,15 @@
 <div class="grid two">
   <section class="card">
     <div class="card-head"><h2>Поточний капітал</h2><span class="muted small">на {{fmtDate .NetWorth.AsOf}}</span></div>
-    <div class="networth"><strong>{{fmtAmount .NetWorth.TotalUAH "UAH"}}</strong></div>
+    <form method="get" action="/snapshots" class="filters">
+      <label>Показати разом у<select name="currency" onchange="this.form.submit()">{{range .Currencies}}<option value="{{.}}" {{if eq . $.TargetCurrency}}selected{{end}}>{{.}}</option>{{end}}</select></label>
+      {{if .IncludeArchived}}<input type="hidden" name="archived" value="1">{{end}}
+    </form>
+    <div class="networth">{{if .TargetTotalOK}}<strong>{{fmtAmount .TargetTotal .TargetCurrency}}</strong>{{else}}<strong>—</strong><span class="warn small">Немає курсу для {{.TargetCurrency}}.</span>{{end}}</div>
+    {{range .CurrencyTotals}}
+    <div class="mini-row"><span>Разом у {{.Currency}}</span><strong class="num">{{fmtAmount .Balance .Currency}}</strong></div>
+    {{end}}
+    <hr>
     {{range .NetWorth.Accounts}}
     <div class="mini-row"><span>{{.AccountName}} <span class="muted small">· {{.OwnerName}}</span></span><span class="num">{{fmtAmount .BalanceMinor .Currency}}{{if .HasRate}} <span class="muted small">≈ {{fmtAmount .BalanceUAH "UAH"}}</span>{{end}}</span></div>
     {{else}}<p class="empty">Ще немає залишків.</p>{{end}}
@@ -35,18 +43,19 @@
 
 {{if .Savings}}
 <section class="card">
-  <div class="card-head"><h2>Динаміка капіталу</h2><span class="muted small">останні 12 місяців</span></div>
+  <div class="card-head"><h2>Динаміка капіталу</h2><span class="muted small">останні 12 знімків · {{.TargetCurrency}}</span></div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Місяць</th><th class="num">Капітал</th><th class="num">Зміна</th><th class="num">%</th><th></th></tr></thead>
+      <thead><tr><th>Знімок</th><th class="num">Капітал</th><th class="num">Зміна</th><th class="num">%</th><th></th></tr></thead>
       <tbody>
       {{range .Savings}}
         <tr>
-          <td>{{fmtMonth .Date}}</td>
-          <td class="num">{{fmtAmount .TotalUAH "UAH"}}</td>
-          <td class="num {{if lt .DeltaUAH 0}}expense{{else}}income{{end}}">{{fmtAmount .DeltaUAH "UAH"}}</td>
-          <td class="num">{{fmtPct .Pct}}%</td>
-          <td style="width:35%"><div class="bar-track"><div class="bar-fill" style="width:{{barPct .TotalUAH $.SavingsMax}}%;background:var(--accent)"></div></div></td>
+          <td>{{fmtDate .Date}}</td>
+          {{if .HasRate}}
+          <td class="num">{{fmtAmount .Total $.TargetCurrency}}{{if .MissingRate}} <span class="warn small">неповно</span>{{end}}</td>
+          {{if .HasPrevious}}<td class="num {{if lt .Delta 0}}expense{{else}}income{{end}}">{{fmtAmount .Delta $.TargetCurrency}}</td><td class="num">{{fmtPct .Pct}}%</td>{{else}}<td class="num">—</td><td class="num">—</td>{{end}}
+          <td style="width:35%"><div class="bar-track"><div class="bar-fill" style="width:{{barPct .Total $.SavingsMax}}%;background:var(--accent)"></div></div></td>
+          {{else}}<td class="num warn">без курсу</td><td class="num">—</td><td class="num">—</td><td></td>{{end}}
         </tr>
       {{end}}
       </tbody>
@@ -57,15 +66,23 @@
 
 {{if .IsAdmin}}
 <section class="card">
-  <h2>Оновити залишок</h2>
-  <form method="post" action="/snapshots/upsert" class="form-grid">
+  <div class="card-head"><div><h2>Новий знімок</h2><p class="muted small">Оновіть усі залишки й збережіть їх разом.</p></div></div>
+  {{if .SnapshotAccounts}}
+  <form method="post" action="/snapshots/upsert" class="stack">
     <input type="hidden" name="csrf_token" value="{{.CSRF}}">
-    <label>Рахунок<select name="account" required>{{range .Accounts}}<option value="{{.Account.UID}}">{{.Account.Name}} · {{.Account.OwnerName}} ({{.Account.Currency}})</option>{{end}}</select></label>
+    <input type="hidden" name="currency" value="{{.TargetCurrency}}">
     <label>Дата<input type="date" name="date" value="{{.Today}}" required></label>
-    <label>Сума<input name="amount" inputmode="decimal" placeholder="5000,00" required></label>
-    <label>Нотатка<input name="note" placeholder="необов'язково"></label>
-    <div class="form-actions span2"><button class="primary" type="submit">Зберегти залишок</button></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Рахунок</th><th>Валюта</th><th class="num">Залишок</th></tr></thead>
+      <tbody>{{range .SnapshotAccounts}}{{$a := .}}<tr>
+        <td><input type="hidden" name="account" value="{{$a.Account.UID}}"><strong>{{$a.Account.Name}}</strong><br><span class="muted small">{{$a.Account.OwnerName}}</span></td>
+        <td>{{$a.Account.Currency}}</td>
+        <td><input class="num" name="amount" inputmode="decimal" value="{{with $a.Latest}}{{plainAmount .BalanceMinor $a.Account.Currency}}{{end}}" required></td>
+      </tr>{{end}}</tbody>
+    </table></div>
+    <div class="form-actions"><button class="primary" type="submit">Зберегти знімок</button></div>
   </form>
+  {{else}}<p class="empty">Спочатку створіть рахунок.</p>{{end}}
 </section>
 {{end}}
 
