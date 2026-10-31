@@ -14,19 +14,21 @@ import (
 )
 
 type statsSelection struct {
-	From, To domain.Date
-	Year     int
-	Custom   bool
-	Kind     domain.Kind
-	User     string
-	UserID   *int64
-	View     string
+	From, To  domain.Date
+	Year      int
+	Custom    bool
+	Kind      domain.Kind
+	User      string
+	UserID    *int64
+	View      string
+	Series    string
+	HasSeries bool
 }
 
 func (s *Server) statsSelection(r *http.Request) (statsSelection, error) {
 	q := r.URL.Query()
 	today := s.svc.Today()
-	v := statsSelection{Year: today.Year(), Kind: domain.KindExpense, User: q.Get("user"), View: "charts"}
+	v := statsSelection{Year: today.Year(), Kind: domain.KindExpense, User: q.Get("user"), View: "charts", Series: q.Get("series"), HasSeries: q.Has("series")}
 	if year, err := strconv.Atoi(q.Get("year")); err == nil && year >= 1 && year <= today.Year() {
 		v.Year = year
 	}
@@ -70,6 +72,9 @@ func (s *Server) statsSelection(r *http.Request) (statsSelection, error) {
 }
 func (v statsSelection) query() url.Values {
 	q := url.Values{"kind": {string(v.Kind)}, "view": {v.View}, "user": {v.User}}
+	if v.HasSeries {
+		q.Set("series", v.Series)
+	}
 	if v.Custom {
 		q.Set("period", "custom")
 		q.Set("from", v.From.String())
@@ -78,6 +83,12 @@ func (v statsSelection) query() url.Values {
 		q.Set("year", strconv.Itoa(v.Year))
 	}
 	return q
+}
+
+func (v statsSelection) yearQuery(year int) url.Values {
+	v.Year = year
+	v.Custom = false
+	return v.query()
 }
 
 type categoryPointView struct {
@@ -163,10 +174,8 @@ func (s *Server) statsPage(w http.ResponseWriter, r *http.Request) {
 	chartsURL := "/stats?" + q.Encode()
 	q.Set("view", "table")
 	tableURL := "/stats?" + q.Encode()
-	prev := url.Values{"kind": {string(v.Kind)}, "view": {v.View}, "user": {v.User}}
-	prev.Set("year", strconv.Itoa(v.Year-1))
-	next := url.Values{"kind": {string(v.Kind)}, "view": {v.View}, "user": {v.User}}
-	next.Set("year", strconv.Itoa(v.Year+1))
+	prev := v.yearQuery(v.Year - 1)
+	next := v.yearQuery(v.Year + 1)
 	s.render(w, r, "stats.html", map[string]any{
 		"Title": "Статистика", "From": v.From, "To": v.To, "Selection": v, "Summary": summary, "Users": users, "AllUsers": allUsers, "Trend": trend, "Comparison": comparison,
 		"Headers": headers, "CategoryRows": rows, "History": history, "ChartsURL": chartsURL, "TableURL": tableURL, "ExportURL": "/stats/export.csv?" + v.query().Encode(),

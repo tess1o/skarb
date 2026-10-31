@@ -93,113 +93,6 @@ document.addEventListener('DOMContentLoaded', function () {
   if (box && window.matchMedia('(min-width: 641px)').matches) box.open = true;
 });
 
-// Charts use the same server totals as the tables; no external chart library.
-document.addEventListener('DOMContentLoaded', function () {
-  document.querySelectorAll('[data-chart]').forEach(function (host) {
-    var points = Array.from(host.querySelectorAll('[data-point]')).map(function (p) { return p.dataset; });
-    var line = host.dataset.chart === 'line';
-    var category = host.dataset.chart === 'category';
-    var currency = host.dataset.currency;
-    var money = new Intl.NumberFormat('uk-UA', { style: 'currency', currency: currency, maximumFractionDigits: 1, notation: 'compact', currencyDisplay: 'narrowSymbol' });
-    var exact = new Intl.NumberFormat('uk-UA', { style: 'currency', currency: currency });
-    var scale = Math.pow(10, exact.resolvedOptions().maximumFractionDigits);
-    var format = function (v) { return exact.format(v / scale); };
-    var ns = 'http://www.w3.org/2000/svg';
-    function node(tag, attrs, text) {
-      var el = document.createElementNS(ns, tag);
-      Object.keys(attrs).forEach(function (key) { el.setAttribute(key, attrs[key]); });
-      if (text !== undefined) el.textContent = text;
-      return el;
-    }
-    var output = document.createElement('p');
-    output.className = 'chart-readout';
-    output.setAttribute('aria-live', 'polite');
-    function description(p) {
-      return p.label + ': ' + ((line || category) ? (p.value === undefined ? 'неповні дані' : format(+p.value) + (+p.missing > 0 ? ' · неповно: операцій без курсу ' + p.missing : '')) : 'доходи ' + format(+p.income) + ' · витрати ' + format(+p.expense) + ' · залишок ' + format(+p.income - +p.expense));
-    }
-    var link;
-    if (category) {
-      link = document.createElement('a');
-      link.className = 'chart-drilldown';
-      link.textContent = 'Транзакції за цей місяць →';
-    }
-    var selected = points[points.length - 1];
-    function show(p) {
-      selected = p;
-      output.textContent = description(p);
-      if (link) link.href = p.url;
-    }
-    function draw() {
-      var old = host.querySelector('svg');
-      if (old) old.remove();
-      var width = host.clientWidth;
-      if (!width || !points.length) { output.textContent = 'Немає даних за період.'; return; }
-      var height = 250, left = width < 400 ? 65 : 90, right = 18, top = 18, bottom = 35;
-      var plotW = width - left - right, plotH = height - top - bottom;
-      var values = points.flatMap(function (p) { return (line || category) ? (p.value === undefined ? [] : [+p.value]) : [+p.income, +p.expense]; });
-      var min = Math.min(0, ...values), max = Math.max(0, ...values);
-      if (max === min) max = min + 100;
-      var y = function (v) { return top + (max - v) / (max - min) * plotH; };
-      var dates = points.map(function (p) { return Date.parse(p.date); });
-      var span = dates[dates.length - 1] - dates[0];
-      var x = function (i) { return line ? left + (span ? (dates[i] - dates[0]) / span : .5) * plotW : left + (i + .5) * plotW / points.length; };
-      var svg = node('svg', { viewBox: '0 0 ' + width + ' ' + height, role: 'group', 'aria-label': host.dataset.label });
-      for (var tick = 0; tick <= 4; tick++) {
-        var value = min + (max - min) * tick / 4;
-        svg.appendChild(node('line', { x1: left, x2: width - right, y1: y(value), y2: y(value), class: 'chart-grid' }));
-        svg.appendChild(node('text', { x: left - 7, y: y(value) + 4, 'text-anchor': 'end', class: 'chart-axis' }, money.format(value / scale)));
-      }
-      if (line) {
-        var path = '', connected = false;
-        points.forEach(function (p, i) {
-          if (p.value === undefined) { connected = false; return; }
-          path += (connected ? ' L ' : ' M ') + x(i) + ' ' + y(+p.value);
-          connected = true;
-        });
-        svg.appendChild(node('path', { d: path, class: 'chart-line' }));
-      }
-      var step = Math.max(1, Math.ceil(points.length / Math.max(2, Math.floor(plotW / 65))));
-      points.forEach(function (p, i) {
-        var cx = x(i);
-        if (line && p.value !== undefined) svg.appendChild(node('circle', { cx: cx, cy: y(+p.value), r: 4, class: 'chart-point' }));
-        if (category) {
-          var singleW = Math.min(30, plotW / points.length * .65);
-          svg.appendChild(node('rect', {x: cx - singleW / 2, y: y(+p.value), width: singleW, height: Math.max(0, y(0) - y(+p.value)), rx: 2, class: 'chart-category' + (+p.missing > 0 ? ' chart-incomplete' : '')}));
-        } else if (!line) {
-          var barW = Math.min(24, plotW / points.length * .32);
-          ['income', 'expense'].forEach(function (key, series) {
-            var value = +p[key];
-            svg.appendChild(node('rect', { x: cx + (series - 1) * barW, y: Math.min(y(value), y(0)), width: Math.max(1, barW - 1), height: Math.abs(y(value) - y(0)), rx: 2, class: 'chart-' + key }));
-          });
-        }
-        if (i % step === 0) svg.appendChild(node('text', { x: cx, y: height - 10, 'text-anchor': 'middle', class: 'chart-axis' }, p.label));
-        var hitW = line ? 28 : Math.max(24, plotW / points.length);
-        var hit = node('rect', { x: Math.max(left - 14, cx - hitW / 2), y: top, width: hitW, height: plotH, tabindex: 0, role: 'button', 'aria-label': description(p), class: 'chart-hit' });
-        function select() { show(p); }
-        hit.addEventListener('pointerenter', select);
-        hit.addEventListener('click', select);
-        hit.addEventListener('focus', select);
-        hit.addEventListener('keydown', function (event) {
-          if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(); }
-        });
-        svg.appendChild(hit);
-      });
-      host.insertBefore(svg, output);
-      show(selected);
-    }
-    host.appendChild(output);
-    if (link) host.appendChild(link);
-    var drawnWidth = 0;
-    new ResizeObserver(function () {
-      // Selecting a point can change the readout height. Only width changes
-      // need new geometry; height changes must not replace the focused point.
-      if (host.clientWidth === drawnWidth) return;
-      drawnWidth = host.clientWidth;
-      draw();
-    }).observe(host);
-  });
-});
-
 // Keep period mode explicit so changing views does not reset filters.
 document.addEventListener('DOMContentLoaded', function () {
   var mode = document.querySelector('[data-period-mode]');
@@ -208,6 +101,14 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('[data-custom-field]').forEach(function (el) { el.hidden = mode.value !== 'custom'; });
     document.querySelectorAll('[data-year-field]').forEach(function (el) { el.hidden = mode.value === 'custom'; });
   }
+  var kind = document.querySelector('.stats-period [name="kind"]');
+  var initialKind = kind.value;
+  kind.addEventListener('change', function () {
+    // Expense and income categories have different IDs. A new kind starts
+    // with its own categories rather than an invisible old selection.
+    var selection = document.querySelector('.stats-period [name="series"]');
+    if (selection) selection.disabled = kind.value !== initialKind;
+  });
   mode.addEventListener('change', update);
   update();
 });

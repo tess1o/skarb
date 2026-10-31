@@ -26,7 +26,7 @@ Backend: Go + SQLite. Deployment: one Docker container. No Node build step, no e
 - OpenAI-compatible LLM parser with strict JSON validation, one repair attempt, and a deterministic regex fallback.
 - MCP over stateless streamable HTTP + a stdio bridge for Claude Desktop.
 - Admin-configurable Telegram chat allowlist, LLM settings, two reminder crons, FX refresh/override, MCP tokens.
-- Calendar-year category statistics with monthly charts, a category-by-month table, filtered transaction links, and matching CSV export. Missing exchange rates are marked as incomplete totals.
+- Calendar-year category statistics with a stacked bar chart and selectable category legend, a category-by-month table, filtered transaction links, and matching CSV export. Missing exchange rates are marked as incomplete totals.
 - A personal profile for name/password/token management; only the admin can change Telegram bindings. User cards hold password resets and account activation controls.
 - CSV export, audit log, consistent SQLite backup download.
 

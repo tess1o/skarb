@@ -3,6 +3,7 @@
 <section class="card">
   <form class="filters stats-period" method="get" action="/stats">
     <input type="hidden" name="view" value="{{.Selection.View}}">
+    {{if .Selection.HasSeries}}<input type="hidden" name="series" value="{{.Selection.Series}}">{{end}}
     <label>Період<select name="period" data-period-mode><option value="year" {{if not .Selection.Custom}}selected{{end}}>Календарний рік</option><option value="custom" {{if .Selection.Custom}}selected{{end}}>Довільний період</option></select></label>
     <label data-year-field>Рік<input type="number" name="year" min="1" max="{{.Year}}" value="{{.Selection.Year}}"></label>
     <label data-custom-field>Від<input type="date" name="from" value="{{.From}}"></label>
@@ -44,18 +45,22 @@
 <section class="category-history">
   <div class="card-head"><h2>Динаміка категорій · {{kindLabel .Selection.Kind}}</h2><nav class="view-toggle" aria-label="Подання"><a class="button small {{if eq .Selection.View "charts"}}primary{{end}}" href="{{.ChartsURL}}" {{if eq .Selection.View "charts"}}aria-current="page"{{end}}>Графіки</a><a class="button small {{if eq .Selection.View "table"}}primary{{end}}" href="{{.TableURL}}" {{if eq .Selection.View "table"}}aria-current="page"{{end}}>Таблиця</a></nav></div>
   {{if eq .Selection.View "charts"}}
-  <p class="muted small">Кожна категорія має власну шкалу від нуля. Для порівняння сум між категоріями відкрийте таблицю. Натисніть місяць, щоб побачити суму та транзакції.</p>
+  <p class="muted small">Кожен стовпчик — місяць, кольорові сегменти — витрати за категоріями. Висота показує суму вибраних категорій. Натискайте назви в легенді для перемикання, місяць — для деталізації. Місяці з відсутніми курсами показані без стовпчика.</p>
   {{range .Headers}}{{if .Partial}}<p class="muted small">{{.Label}} — неповний місяць: {{fmtDate .From}} — {{fmtDate .To}}.</p>{{end}}{{end}}
-  <div class="grid two category-chart-grid">
-    {{range .CategoryRows}}
-    <section class="card category-chart-card">
-      <div class="card-head"><h3>{{.Category.Emoji}} {{.Category.Name}}</h3><strong>{{fmtAmount .Total.AmountUAH "UAH"}}{{if .Total.MissingRate}} <span class="warn small">неповно</span>{{end}}</strong></div>
-      <div class="data-chart" data-chart="category" data-label="{{.Category.Name}}" data-currency="UAH" style="--chart-color:{{.Category.Color}}">
-        {{range .Points}}<span hidden data-point data-date="{{.Date}}" data-label="{{.Label}}" data-value="{{.AmountUAH}}" data-missing="{{.MissingRate}}" data-url="{{.URL}}"></span>{{end}}
+  {{if .CategoryRows}}
+  <section class="card category-series-card">
+    <div class="data-chart" data-chart="categories" data-label="Динаміка категорій" data-currency="UAH">
+      <div class="series-controls"><button type="button" class="small" data-series-all>Увімкнути всі</button><button type="button" class="small" data-series-none>Вимкнути всі</button></div>
+      <div class="series-legend" role="group" aria-label="Категорії на графіку">
+        {{range $row := .CategoryRows}}<button type="button" class="series-toggle" data-series-toggle="{{$row.Category.UID}}" aria-pressed="true" style="--series-color:{{$row.Category.Color}}"><span class="series-swatch" aria-hidden="true"></span><span>{{$row.Category.Emoji}} {{$row.Category.Name}}</span></button>{{end}}
       </div>
-    </section>
-    {{else}}<p class="card empty">Немає операцій за цей період.</p>{{end}}
-  </div>
+      {{range .CategoryRows}}<div hidden data-series data-id="{{.Category.UID}}" data-name="{{.Category.Name}}" data-color="{{.Category.Color}}">
+        {{range .Points}}<span data-point data-date="{{.Date}}" data-label="{{.Label}}" data-value="{{.AmountUAH}}" data-missing="{{.MissingRate}}" data-url="{{.URL}}"></span>{{end}}
+      </div>{{end}}
+    </div>
+    <noscript><p>Для інтерактивного графіка потрібен JavaScript. Точні суми доступні в поданні «Таблиця».</p></noscript>
+  </section>
+  {{else}}<p class="card empty">Немає операцій за цей період.</p>{{end}}
   {{else}}
   <section class="card"><div class="table-wrap category-matrix" tabindex="0" role="region" aria-label="Помісячні суми категорій">
     <table><thead><tr><th scope="col">Категорія</th>{{range .Headers}}<th class="num" scope="col">{{.Label}}{{if .Partial}} *{{end}}</th>{{end}}<th class="num" scope="col">Разом</th></tr></thead>

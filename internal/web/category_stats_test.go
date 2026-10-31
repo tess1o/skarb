@@ -33,6 +33,10 @@ func TestCategoryStatsViewsCSVAndDrilldown(t *testing.T) {
 			t.Fatalf("%s: %d %s", view, rec.Code, rec.Body.String())
 		}
 		body := html.UnescapeString(rec.Body.String())
+		if view == "charts" && (strings.Count(body, `data-chart="categories"`) != 1 || strings.Contains(body, `data-chart="category"`) || !strings.Contains(body, `data-series-toggle="`+food.UID+`"`)) {
+			t.Fatal("expected one category chart with a category legend")
+		}
+
 		if !strings.Contains(body, "Динаміка категорій") || !strings.Contains(body, food.Name) || !strings.Contains(body, "2026-01-01") {
 			t.Fatal("missing category or year")
 		}
