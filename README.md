@@ -26,6 +26,8 @@ Backend: Go + SQLite. Deployment: one Docker container. No Node build step, no e
 - OpenAI-compatible LLM parser with strict JSON validation, one repair attempt, and a deterministic regex fallback.
 - MCP over stateless streamable HTTP + a stdio bridge for Claude Desktop.
 - Admin-configurable Telegram chat allowlist, LLM settings, two reminder crons, FX refresh/override, MCP tokens.
+- Calendar-year category statistics with monthly charts, a category-by-month table, filtered transaction links, and matching CSV export. Missing exchange rates are marked as incomplete totals.
+- A personal profile for name/password/token management; only the admin can change Telegram bindings. User cards hold password resets and account activation controls.
 - CSV export, audit log, consistent SQLite backup download.
 
 ## Quick start (Docker)
@@ -41,11 +43,11 @@ docker compose up -d --build
 Open `http://127.0.0.1:8080`, log in as the admin, then:
 
 1. Create the second user in **Користувачі**. Save the temporary password shown in the flash message.
-2. Change the admin password in **Мої налаштування** if desired (the config password is only the bootstrap source).
+2. Change the admin password in **Мій профіль** if desired (the config password is only the bootstrap source).
 3. Create categories/aliases if the seeded Ukrainian categories need adjustment.
 4. Add savings accounts and the first balances in **Заощадження**.
 5. Set up Telegram (below) and the LLM (below).
-6. Create an MCP token in **Мої налаштування** or **Налаштування**.
+6. Create an MCP token in **Мій профіль** or **Адміністрування → Налаштування системи**.
 
 The compose file binds the web port to `127.0.0.1` only. Put it behind Caddy/nginx/Traefik for TLS if it will be reachable from the internet. When you switch to HTTPS, set `SKARB_PUBLIC_BASE_URL=https://...` and `SKARB_COOKIE_SECURE=true`; for local plain-HTTP setup keep it `false`, otherwise the browser will not send the session cookie.
 
@@ -55,7 +57,7 @@ The compose file binds the web port to `127.0.0.1` only. Put it behind Caddy/ngi
 2. In BotFather, open `/setprivacy` for the bot and choose **Disable**. This is required: with privacy mode enabled, the bot does not receive ordinary group messages such as `512 грн за їжу`.
 3. Add the bot to the family group. If you changed privacy mode after adding it, remove the bot from the group and add it again.
 4. In the group, send `/id`. The bot replies with the chat ID and your Telegram user ID. `/id` works before the chat is allowlisted.
-5. In **Налаштування → Telegram**, add the group chat ID (title is optional). Only allowlisted groups are accepted.
+5. In **Адміністрування → Налаштування системи → Telegram**, add the group chat ID (title is optional). Only allowlisted groups are accepted.
 6. In **Користувачі**, edit each user and set their numeric Telegram user ID. Only linked, active users can add transactions or view stats.
 7. Send a test message in the group.
 
@@ -75,7 +77,7 @@ Commands:
 
 In a private chat, or in a group when the bot is @mentioned or you reply to one of its
 messages, the bot can call the same tools as the MCP server. An admin can change
-**Налаштування → ШІ-парсер → ШІ в групах** to process every group message instead:
+**Адміністрування → Налаштування системи → ШІ-парсер → ШІ в групах** to process every group message instead:
 
 ```text
 покажи всі транзакції за жовтень
@@ -105,7 +107,7 @@ Set the API key in the environment:
 SKARB_LLM_API_KEY=...
 ```
 
-Then in **Налаштування → ШІ-парсер** set:
+Then in **Адміністрування → Налаштування системи → ШІ-парсер** set:
 
 - **Base URL** — e.g. `https://api.openai.com/v1`, `https://openrouter.ai/api/v1`, `http://host.docker.internal:11434/v1` (Ollama), or `http://host.docker.internal:1234/v1` (LM Studio).
 - **Model** — the exact model name at that endpoint.
@@ -127,7 +129,7 @@ For a local model, the container needs network access to the host. On Docker Des
 
 ## MCP
 
-Create a token in **Мої налаштування → Мої MCP-токени** (or as admin in **Налаштування → MCP-токени**). The plaintext token is shown once.
+Create a token in **Мій профіль → Інтеграції → Мої MCP-токени** (or as admin in **Адміністрування → Налаштування системи → MCP-токени**). The plaintext token is shown once.
 
 ### HTTP (Claude Code / remote clients)
 
@@ -216,12 +218,12 @@ Create accounts in **Заощадження** (e.g. `bank1` for one spouse, `ban
 - The savings page shows native totals per currency and can convert the combined total to any supported currency.
 - Rates come from the NBU daily API (`bank.gov.ua`). The app refreshes at ~16:10 Kyiv, on startup, and on demand. Historical rates are fetched when needed; a 730-day backfill runs at startup.
 - Stats convert foreign transactions at the transaction-date rate (or the nearest prior business day). Net worth converts snapshots at the requested date's rate.
-- Admins can manually override a rate in **Налаштування → Курси NBU**. Manual overrides are not overwritten by the daily NBU job.
+- Admins can manually override a rate in **Адміністрування → Налаштування системи → Курси NBU**. Manual overrides are not overwritten by the daily NBU job.
 - If a rate is missing, converted totals exclude the row and show a warning; the native-currency total remains.
 
 ## Reminders
 
-Two configurable cron entries live in **Налаштування → Нагадування**:
+Two configurable cron entries live in **Адміністрування → Налаштування системи → Нагадування**:
 
 - **transactions** — default `0 10 * * 1` (Monday 10:00 Kyiv), window 7 days. Sends only when there are zero active transactions in the window.
 - **snapshot** — default `0 10 1 * *` (1st of the month, 10:00 Kyiv). Lists active accounts without a balance in the current month.
@@ -231,7 +233,7 @@ Each has an enabled flag, timezone, target group, and optional target user. If n
 ## Backup and restore
 
 - The app runs `VACUUM INTO` daily at 03:00 Kyiv into `/data/backups` (retain 14 days).
-- **Налаштування → Резервні копії** downloads a consistent snapshot.
+- **Адміністрування → Налаштування системи → Резервні копії** downloads a consistent snapshot.
 - Restore: stop the container, keep the old database/WAL/SHM, replace the main `skarb.db` with the backup, remove stale `-wal`/`-shm`, then start the container and verify `/readyz`, login, recent transactions, snapshots, and MCP.
 - The database is not encrypted at rest. Use host/volume encryption if that matters to you.
 

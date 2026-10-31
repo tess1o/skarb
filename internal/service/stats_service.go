@@ -278,13 +278,17 @@ func abs64(v int64) int64 {
 }
 
 func (s *Service) Trend(ctx context.Context, actor domain.Actor, from, to domain.Date, granularity string) ([]domain.TrendPoint, error) {
+	return s.TrendForUser(ctx, actor, from, to, granularity, nil)
+}
+
+func (s *Service) TrendForUser(ctx context.Context, actor domain.Actor, from, to domain.Date, granularity string, userID *int64) ([]domain.TrendPoint, error) {
 	if err := s.RequireAuth(actor); err != nil {
 		return nil, err
 	}
 	if to.Before(from) {
 		return nil, validation("period", "end is before start")
 	}
-	rows, err := s.Store.ListTransactionsForStats(ctx, store.TransactionFilter{From: &from, To: &to})
+	rows, err := s.Store.ListTransactionsForStats(ctx, store.TransactionFilter{From: &from, To: &to, OwnerUserID: userID})
 	if err != nil {
 		return nil, err
 	}
@@ -473,21 +477,25 @@ func (s *Service) MonthlySummary(ctx context.Context, actor domain.Actor, month 
 	return sum, r, err
 }
 
+type DashboardCategory struct {
+	domain.CategoryTotal
+	MissingRate int
+}
+
 type DashboardData struct {
-	Today       domain.Date
-	Month       string // YYYY-MM being shown
-	PrevMonth   string // YYYY-MM of the month before
-	NextMonth   string // YYYY-MM of the month after; empty when Month is the current month
-	IsCurrent   bool
-	Period      domain.DateRange
-	Previous    domain.DateRange
-	Summary     *domain.Summary
-	PrevSummary *domain.Summary
-	Categories  []domain.CategoryTotal
-	Trend       []domain.TrendPoint
-	TrendMax    int64
-	NetWorth    *domain.NetWorth
-	Recent      []domain.Transaction
+	Today                        domain.Date
+	Month                        string // YYYY-MM being shown
+	PrevMonth                    string // YYYY-MM of the month before
+	NextMonth                    string // YYYY-MM of the month after; empty when Month is the current month
+	IsCurrent                    bool
+	Period                       domain.DateRange
+	Previous                     domain.DateRange
+	Summary                      *domain.Summary
+	PrevSummary                  *domain.Summary
+	Categories                   []DashboardCategory
+	CategoryChanges              map[int64]int64
+	CategoryComparisonIncomplete bool
+	Recent                       []domain.Transaction
 }
 
 func (s *Service) Dashboard(ctx context.Context, actor domain.Actor) (*DashboardData, error) {
@@ -513,54 +521,50 @@ func (s *Service) DashboardMonth(ctx context.Context, actor domain.Actor, month 
 	if err != nil {
 		return nil, err
 	}
-	cats, err := s.CategoryBreakdown(ctx, actor, store.TransactionFilter{From: &mtd.From, To: &mtd.To}, domain.KindExpense, 7)
+	history, err := s.CategoryHistory(ctx, actor, store.TransactionFilter{From: &mtd.From, To: &mtd.To}, domain.KindExpense)
 	if err != nil {
 		return nil, err
 	}
-	trend, err := s.Trend(ctx, actor, mtd.From, mtd.To, "day")
-	if err != nil {
-		return nil, err
-	}
-	nw, err := s.NetWorth(ctx, actor, mtd.To)
-	if err != nil {
-		return nil, err
-	}
-	var recent []domain.Transaction
-	if current {
-		recent, err = s.RecentTransactions(ctx, actor, 10)
-	} else {
-		recent, err = s.Store.ListTransactions(ctx, store.TransactionFilter{From: &mtd.From, To: &mtd.To, Limit: 10})
-	}
-	if err != nil {
-		return nil, err
-	}
-	var trendMax int64
-	for _, p := range trend {
-		if p.ExpenseUAH > trendMax {
-			trendMax = p.ExpenseUAH
+	var cats []DashboardCategory
+	for _, r := range history.Rows {
+		percent := 0.0
+		if cur.ExpenseUAH > 0 {
+			percent = float64(r.Total.AmountUAH) / float64(cur.ExpenseUAH) * 100
 		}
-		if p.IncomeUAH > trendMax {
-			trendMax = p.IncomeUAH
-		}
+		cats = append(cats, DashboardCategory{CategoryTotal: domain.CategoryTotal{CategoryID: r.Category.ID, UID: r.Category.UID, Name: r.Category.Name, Emoji: r.Category.Emoji, Color: r.Category.Color, Kind: domain.KindExpense, AmountUAH: r.Total.AmountUAH, Percent: percent}, MissingRate: r.Total.MissingRate})
+	}
+	previousCats, err := s.CategoryBreakdown(ctx, actor, store.TransactionFilter{From: &prev.From, To: &prev.To}, domain.KindExpense, 0)
+	if err != nil {
+		return nil, err
+	}
+	changes := map[int64]int64{}
+	for _, c := range previousCats {
+		changes[c.CategoryID] = -c.AmountUAH
+	}
+	for _, c := range cats {
+		changes[c.CategoryID] += c.AmountUAH
+	}
+	recent, err := s.Store.ListTransactions(ctx, store.TransactionFilter{From: &mtd.From, To: &mtd.To, Limit: 10})
+	if err != nil {
+		return nil, err
 	}
 	next := ""
 	if !current {
 		next = MonthRange(mtd.From.Year(), mtd.From.Month()+1).From.Format("2006-01")
 	}
 	return &DashboardData{
-		Today:       today,
-		Month:       mtd.From.Format("2006-01"),
-		PrevMonth:   prev.From.Format("2006-01"),
-		NextMonth:   next,
-		IsCurrent:   current,
-		Period:      mtd,
-		Previous:    prev,
-		Summary:     cur,
-		PrevSummary: prevSum,
-		Categories:  cats,
-		Trend:       trend,
-		TrendMax:    trendMax,
-		NetWorth:    nw,
-		Recent:      recent,
+		Today:                        today,
+		Month:                        mtd.From.Format("2006-01"),
+		PrevMonth:                    prev.From.Format("2006-01"),
+		NextMonth:                    next,
+		IsCurrent:                    current,
+		Period:                       mtd,
+		Previous:                     prev,
+		Summary:                      cur,
+		PrevSummary:                  prevSum,
+		Categories:                   cats,
+		CategoryChanges:              changes,
+		CategoryComparisonIncomplete: cur.MissingRate > 0 || prevSum.MissingRate > 0,
+		Recent:                       recent,
 	}, nil
 }

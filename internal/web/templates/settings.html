@@ -1,5 +1,5 @@
 {{define "content"}}
-<div class="page-head"><div><h1>Налаштування</h1><p class="muted">ШІ, Telegram, нагадування, курси та MCP.</p></div><a class="button" href="/admin/audit">Журнал дій</a></div>
+<div class="page-head"><div><h1>Налаштування системи</h1><p class="muted">ШІ, Telegram, нагадування, курси та MCP.</p></div><a class="button" href="/admin/audit">Журнал дій</a></div>
 
 <section class="card">
   <div class="card-head"><h2>ШІ-парсер</h2><span>{{if .LLMConfigured}}<span class="badge success">підключено</span>{{else}}<span class="badge">не налаштовано</span>{{end}} {{if .LLMKeySet}}<span class="badge success">ключ є</span>{{else}}<span class="badge danger">немає ключа</span>{{end}}</span></div>
@@ -36,7 +36,7 @@
 
 <section class="card">
   <div class="card-head"><h2>Telegram</h2><span class="muted small">Бот працює через long polling</span></div>
-  <p class="muted small">Вимкніть Group Privacy у BotFather, перезапустіть бота в групі, надішліть <code>/id</code> і додайте chat ID сюди. Користувачів прив'язуйте на сторінці «Користувачі».</p>
+  <p class="muted small">Вимкніть Group Privacy у BotFather, перезапустіть бота в групі, надішліть <code>/id</code> і додайте chat ID сюди. Особисту прив’язку змінюйте в «Моєму профілі», інших користувачів — у їхніх картках.</p>
   <div class="table-wrap">
     <table>
       <thead><tr><th>Chat ID</th><th>Назва</th><th>Тип</th><th>Додано</th><th></th></tr></thead>

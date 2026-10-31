@@ -1,13 +1,39 @@
 {{define "content"}}
-<div class="page-head"><div><h1>Мої налаштування</h1><p class="muted">{{.User.DisplayName}} · {{.User.Username}}</p></div></div>
+<div class="page-head"><div><h1>Мій профіль</h1><p class="muted">{{.User.DisplayName}} · {{.User.Username}}</p></div></div>
 
 {{if .User.MustChangePassword}}
 <div class="flash warning">Використовується тимчасовий пароль. Змініть його, щоб продовжити.</div>
 {{end}}
 
-<section class="card">
+<section class="card" id="profile">
+  <h2>Особисті дані</h2>
+  <p class="muted small">Логін: <strong>{{.User.Username}}</strong></p>
+  {{with .ProfileError}}<p class="flash error" role="alert">{{.}}</p>{{end}}
+  <form method="post" action="/settings/profile#profile" class="stack">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <label>Ім’я<input name="display_name" value="{{.ProfileName}}" autocomplete="name" required></label>
+    <div class="form-actions"><button class="primary" type="submit">Зберегти ім’я</button></div>
+  </form>
+</section>
+<section class="card" id="telegram">
+  <h2>Telegram</h2>
+  {{if .IsAdmin}}
+  {{with .TelegramError}}<p class="flash error" role="alert">{{.}}</p>{{end}}
+  <form method="post" action="/settings/telegram#telegram" class="stack">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <label>Telegram user ID<input name="telegram_id" inputmode="numeric" value="{{.TelegramValue}}" placeholder="Не прив’язано" aria-describedby="telegram-help"></label>
+    <p class="muted small" id="telegram-help">Дізнайтеся свій user ID командою /id у боті. Порожнє поле відв’язує Telegram.</p>
+    <div class="form-actions"><button class="primary" type="submit">Зберегти Telegram</button></div>
+  </form>
+  {{else}}
+  <p>{{if .User.TelegramUserID}}{{derefInt64 .User.TelegramUserID}}{{else}}Не прив’язано{{end}}</p>
+  <p class="muted small">Прив’язку змінює адміністратор.</p>
+  {{end}}
+</section>
+
+<section class="card" id="password">
   <h2>Змінити пароль</h2>
-  <form method="post" action="/settings/password" class="form-grid">
+  <form method="post" action="/settings/password#password" class="form-grid">
     <input type="hidden" name="csrf_token" value="{{.CSRF}}">
     <label>Старий пароль<input type="password" name="old_password" autocomplete="current-password" required></label>
     <label>Новий пароль<input type="password" name="new_password" autocomplete="new-password" required minlength="10"></label>
@@ -16,20 +42,21 @@
   <p class="muted small">Після зміни пароля всі сесії та MCP-токени буде відкликано.</p>
 </section>
 
-<section class="card">
-  <div class="card-head"><h2>Мої MCP-токени</h2><span class="muted small">Для Claude Code / Claude Desktop</span></div>
+<section class="card" id="integrations">
+  <h2>Інтеграції</h2>
+  <div class="card-head"><h3>Мої MCP-токени</h3><span class="muted small">Для Claude Code / Claude Desktop</span></div>
   <div class="table-wrap">
     <table>
       <thead><tr><th>Назва</th><th>Префікс</th><th>Створено</th><th>Останнє використання</th><th></th></tr></thead>
       <tbody>
       {{range .Tokens}}
         <tr><td>{{.Name}}</td><td><code>{{.TokenPrefix}}…{{.Last4}}</code></td><td>{{fmtDateTime .CreatedAt}}</td><td>{{fmtTimePtr .LastUsedAt}}</td>
-        <td>{{if .RevokedAt}}<span class="badge danger">відкликано</span>{{else}}<form method="post" action="/settings/tokens/{{.UID}}/revoke" class="inline"><input type="hidden" name="csrf_token" value="{{$.CSRF}}"><button class="link danger" type="submit">відкликати</button></form>{{end}}</td></tr>
+        <td>{{if .RevokedAt}}<span class="badge danger">відкликано</span>{{else}}<form method="post" action="/settings/tokens/{{.UID}}/revoke#integrations" class="inline"><input type="hidden" name="csrf_token" value="{{$.CSRF}}"><button class="link danger" type="submit">відкликати</button></form>{{end}}</td></tr>
       {{else}}<tr><td colspan="5" class="empty">Токенів немає.</td></tr>{{end}}
       </tbody>
     </table>
   </div>
-  <form method="post" action="/settings/tokens" class="form-grid">
+  <form method="post" action="/settings/tokens#integrations" class="form-grid">
     <input type="hidden" name="csrf_token" value="{{.CSRF}}">
     <label>Назва<input name="name" placeholder="Claude Code" required></label>
     <label>Термін<select name="expires_days"><option value="">Безстроковий</option><option value="365">1 рік</option></select></label>

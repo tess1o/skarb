@@ -26,6 +26,13 @@ func (s *Server) transactionsPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	categories, _ := s.svc.ListCategories(r.Context(), actor, false)
+	// Keep an archived category visible when arriving from historical statistics.
+	if uid := r.URL.Query().Get("category"); uid != "" {
+		if selected, err := s.svc.CategoryByUID(r.Context(), actor, uid); err == nil && selected.Archived() {
+			categories = append(categories, *selected)
+		}
+	}
+
 	users, _ := s.svc.ListUsers(r.Context(), actor, false)
 	activeFilters := 0
 	for _, key := range []string{"from", "to", "user", "category", "kind", "source", "q", "deleted"} {

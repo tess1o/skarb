@@ -157,6 +157,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /admin/backup", s.requireAdmin(http.HandlerFunc(s.backupDownload)))
 
 	mux.Handle("GET /settings", s.requireAuth(http.HandlerFunc(s.ownSettingsPage)))
+	mux.Handle("POST /settings/profile", s.requireAuth(http.HandlerFunc(s.ownProfileUpdate)))
+	mux.Handle("POST /settings/telegram", s.requireAdmin(http.HandlerFunc(s.ownTelegramUpdate)))
 	mux.Handle("POST /settings/password", s.requireAuth(http.HandlerFunc(s.ownPasswordChange)))
 	mux.Handle("POST /settings/tokens", s.requireAuth(http.HandlerFunc(s.ownTokenCreate)))
 	mux.Handle("POST /settings/tokens/{uid}/revoke", s.requireAuth(http.HandlerFunc(s.ownTokenRevoke)))
@@ -287,7 +289,7 @@ func (s *Server) baseData(w http.ResponseWriter, r *http.Request) map[string]any
 	data := map[string]any{
 		"Path":       r.URL.Path,
 		"RequestURI": r.URL.RequestURI(),
-		"Year":       time.Now().Year(),
+		"Year":       s.svc.Today().Year(),
 		"User":       u,
 		"Flash":      s.getFlash(w, r),
 	}
@@ -639,15 +641,6 @@ func (s *Server) templateFuncs() template.FuncMap {
 		},
 		"add": func(a, b int64) int64 { return a + b },
 		"sub": func(a, b int64) int64 { return a - b },
-		// trendTick thins axis labels on a daily bar chart: every fifth point,
-		// plus the first and last. Points too close to the last label are
-		// dropped so the final two labels never overlap.
-		"trendTick": func(i, n int) bool {
-			if n <= 8 || i == 0 || i == n-1 {
-				return true
-			}
-			return i%5 == 0 && n-1-i >= 3
-		},
 		"plural": func(n int, one, few, many string) string {
 			return pluralUK(n, one, few, many)
 		},

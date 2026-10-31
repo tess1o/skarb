@@ -44,6 +44,10 @@
 {{if .Savings}}
 <section class="card">
   <div class="card-head"><h2>Динаміка капіталу</h2><span class="muted small">останні 12 знімків · {{.TargetCurrency}}</span></div>
+  <div class="data-chart" data-chart="line" data-label="Капітал" data-currency="{{.TargetCurrency}}">
+    {{range .Savings}}<span hidden data-point data-date="{{.Date}}" data-label="{{fmtDate .Date}}" {{if and .HasRate (not .MissingRate)}}data-value="{{.Total}}"{{end}}></span>{{end}}
+  </div>
+  <p class="muted small">Збережені залишки на дати знімків. Зміна капіталу включає зміни курсів. Неповні суми не з’єднуються лінією.</p>
   <div class="table-wrap">
     <table>
       <thead><tr><th>Знімок</th><th class="num">Капітал</th><th class="num">Зміна</th><th class="num">%</th><th></th></tr></thead>

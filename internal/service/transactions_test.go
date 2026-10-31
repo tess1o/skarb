@@ -226,3 +226,27 @@ func TestDeleteTransactionsBulk(t *testing.T) {
 		t.Fatal("expected error for empty selection")
 	}
 }
+
+func TestTrendForUserMatchesSummary(t *testing.T) {
+	ctx := context.Background()
+	svc, admin, cleanup := setupService(t)
+	defer cleanup()
+	member := newMember(t, svc, admin)
+	day := svc.Today()
+	addExpense(t, svc, admin, day, "500", "admin")
+	addExpense(t, svc, member, day, "200", "member")
+	for _, granularity := range []string{"day", "month"} {
+		id := member.UserID
+		points, err := svc.TrendForUser(ctx, admin, day.AddDays(-1), day, granularity, &id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var total int64
+		for _, p := range points {
+			total += p.ExpenseUAH
+		}
+		if total != 20000 {
+			t.Fatalf("%s: got %d, want member's 20000", granularity, total)
+		}
+	}
+}

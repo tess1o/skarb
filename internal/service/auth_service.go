@@ -201,6 +201,9 @@ func (s *Service) CreateUser(ctx context.Context, actor domain.Actor, in CreateU
 	if err := auth.ValidatePassword(in.Password); err != nil {
 		return nil, "", validation("password", err.Error())
 	}
+	if err := s.validateTelegramID(ctx, in.TelegramUserID, 0); err != nil {
+		return nil, "", err
+	}
 	count, err := s.Store.CountActiveUsers(ctx, nil, 0)
 	if err != nil {
 		return nil, "", err
@@ -274,32 +277,6 @@ func (s *Service) SetUserActive(ctx context.Context, actor domain.Actor, uid str
 		_ = s.Store.RevokeAllUserAPITokens(ctx, target.ID)
 	}
 	return nil
-}
-
-func (s *Service) UpdateUser(ctx context.Context, actor domain.Actor, uid, displayName string, telegramID *int64) error {
-	if err := s.RequireAdmin(actor); err != nil {
-		return err
-	}
-	target, err := s.Store.GetUserByUID(ctx, uid)
-	if err != nil {
-		return err
-	}
-	displayName = strings.TrimSpace(displayName)
-	if displayName == "" {
-		return validation("display_name", "display name is required")
-	}
-	err = s.withTx(ctx, func(tx *sql.Tx) error {
-		if err := s.Store.SetUserDisplayName(ctx, tx, target.ID, displayName); err != nil {
-			return err
-		}
-		if err := s.Store.SetUserTelegramID(ctx, tx, target.ID, telegramID); err != nil {
-			return err
-		}
-		target.DisplayName = displayName
-		target.TelegramUserID = telegramID
-		return s.audit(ctx, tx, actor, "user.updated", "user", target.UID, nil, safeUser(target))
-	})
-	return err
 }
 
 func (s *Service) ResetUserPassword(ctx context.Context, actor domain.Actor, uid string) (string, error) {

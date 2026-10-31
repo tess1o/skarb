@@ -1,9 +1,36 @@
 {{define "content"}}
-<div class="page-head"><div><h1>{{.Title}}</h1><p class="muted">{{.EditUser.Username}}</p></div><a class="button" href="/admin/users">← Назад</a></div>
-<form method="post" action="{{.Action}}" class="card form-grid">
-  <input type="hidden" name="csrf_token" value="{{.CSRF}}">
-  <label>Ім'я<input name="display_name" value="{{.EditUser.DisplayName}}" required></label>
-  <label>Telegram user_id<input name="telegram_id" inputmode="numeric" value="{{if .EditUser.TelegramUserID}}{{derefInt64 .EditUser.TelegramUserID}}{{end}}" placeholder="123456789"></label>
-  <div class="form-actions span2"><button class="primary" type="submit">Зберегти</button><a class="button" href="/admin/users">Скасувати</a></div>
-</form>
+<div class="page-head"><div><h1>{{.EditUser.DisplayName}}</h1><p class="muted">{{.EditUser.Username}} · {{roleLabel .EditUser.Role}} · {{if .EditUser.IsActive}}Активний{{else}}Вимкнений{{end}}</p></div><a class="button" href="/admin/users">← Користувачі</a></div>
+<section class="card" id="personal">
+  <h2>Особисті дані та Telegram</h2>
+  {{with .ProfileError}}<p class="flash error" role="alert">{{.}}</p>{{end}}
+  <form method="post" action="{{.Action}}#personal" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <label>Ім’я<input name="display_name" value="{{.Form.display_name}}" required></label>
+    <label>Telegram user ID<input name="telegram_id" inputmode="numeric" value="{{.Form.telegram_id}}" placeholder="Не прив’язано"></label>
+    <p class="muted small span2">Порожнє поле відв’язує Telegram. User ID можна дізнатися командою /id у боті.</p>
+    <div class="form-actions span2"><button class="primary" type="submit">Зберегти дані</button></div>
+  </form>
+</section>
+<section class="card" id="access">
+  <h2>Доступ</h2>
+  {{if .IsSelf}}
+  <a class="button" href="/settings#password">Змінити мій пароль</a>
+  {{else}}
+  <p class="muted">Скидання створить тимчасовий пароль і відкличе всі сесії та MCP-токени користувача. Після входу потрібно буде змінити пароль.</p>
+  <form method="post" action="/admin/users/{{.EditUser.UID}}/reset#access" data-confirm="Створити тимчасовий пароль і відкликати всі сесії та MCP-токени користувача?">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <button class="button" type="submit">Скинути пароль</button>
+  </form>
+  {{end}}
+  <h3>Активність акаунта</h3>
+  {{if or .IsSelf .EditUser.IsAdmin}}<p class="muted small">Власний акаунт і акаунт адміністратора не можна деактивувати.</p>
+  {{else}}
+  <p class="muted small">Деактивація закриває доступ, історія транзакцій зберігається.</p>
+  <form method="post" action="/admin/users/{{.EditUser.UID}}/active#access" {{if .EditUser.IsActive}}data-confirm="Деактивувати користувача та відкликати його доступ?"{{end}}>
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <input type="hidden" name="active" value="{{if .EditUser.IsActive}}0{{else}}1{{end}}">
+    <button class="button" type="submit">{{if .EditUser.IsActive}}Деактивувати{{else}}Активувати{{end}}</button>
+  </form>
+  {{end}}
+</section>
 {{end}}

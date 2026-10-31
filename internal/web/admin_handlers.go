@@ -38,7 +38,7 @@ func (s *Server) adminSettingsPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.render(w, r, "settings.html", map[string]any{
-		"Title":         "Налаштування",
+		"Title":         "Налаштування системи",
 		"LLM":           llm,
 		"LLMConfigured": s.svc.LLMConfigured(llm),
 		"LLMKeySet":     s.svc.Cfg.LLMAPIKey != "",
