@@ -616,3 +616,26 @@ func TestToolModeLLMFailureFallsBackToRegex(t *testing.T) {
 		t.Fatalf("LLM failure fallback failed: %s", text)
 	}
 }
+
+func TestToolModeTruncatedLLMFallsBackToAmountList(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []any{map[string]any{
+				"message":       map[string]any{"content": ""},
+				"finish_reason": "length",
+			}},
+		})
+	})
+	env := newToolTestEnv(t, handler)
+	text := strings.Join([]string{
+		"200 книга для Ані на подарунок",
+		"119 новорічна аплікація з помпонів для Паші",
+		"85 тест на вагітність",
+	}, "\n")
+	env.addUpdate(messageUpdate(1, 123, "private", 123, text))
+	sent := env.waitSent(t, 1)[0]
+	msg, _ := sent["text"].(string)
+	if !strings.Contains(msg, "Записано") || !strings.Contains(msg, "200") {
+		t.Fatalf("truncated LLM fallback failed: %s", msg)
+	}
+}

@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -60,5 +61,72 @@ func TestChatJSONRefusal(t *testing.T) {
 	client := New(Config{BaseURL: ts.URL, Model: "fake", SchemaMode: "prompt", Timeout: 5 * time.Second, MaxOutputTokens: 100})
 	if _, err := client.ChatJSON(context.Background(), "system", "user", nil); err == nil {
 		t.Fatal("expected refusal error")
+	}
+}
+
+func TestChatJSONRetriesTruncatedOutput(t *testing.T) {
+	var budgets []int
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		budget, _ := body["max_tokens"].(float64)
+		budgets = append(budgets, int(budget))
+		finish := "stop"
+		content := `{"ok":true}`
+		if len(budgets) == 1 {
+			finish = "length"
+			content = `{"tool":"add`
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []any{map[string]any{
+				"message":       map[string]any{"content": content},
+				"finish_reason": finish,
+			}},
+		})
+	}))
+	defer ts.Close()
+
+	client := New(Config{BaseURL: ts.URL, Model: "fake", SchemaMode: "prompt", Timeout: 5 * time.Second, MaxOutputTokens: 100})
+	res, err := client.ChatJSON(context.Background(), "system", "user", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Content != `{"ok":true}` {
+		t.Fatalf("content = %q", res.Content)
+	}
+	if len(budgets) != 2 || budgets[0] != 100 || budgets[1] != 200 {
+		t.Fatalf("max_tokens budgets = %v, want [100 200]", budgets)
+	}
+}
+
+func TestChatJSONTruncationExhaustsBudget(t *testing.T) {
+	var budgets []int
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		budget, _ := body["max_tokens"].(float64)
+		budgets = append(budgets, int(budget))
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []any{map[string]any{
+				"message":       map[string]any{"content": ""},
+				"finish_reason": "length",
+			}},
+		})
+	}))
+	defer ts.Close()
+
+	client := New(Config{BaseURL: ts.URL, Model: "fake", SchemaMode: "prompt", Timeout: 5 * time.Second, MaxOutputTokens: 100})
+	_, err := client.ChatJSON(context.Background(), "system", "user", nil)
+	if !errors.Is(err, ErrTruncated) {
+		t.Fatalf("error = %v, want ErrTruncated", err)
+	}
+	want := []int{100, 200, 400}
+	if len(budgets) != len(want) {
+		t.Fatalf("max_tokens budgets = %v, want %v", budgets, want)
+	}
+	for i := range want {
+		if budgets[i] != want[i] {
+			t.Fatalf("max_tokens budgets = %v, want %v", budgets, want)
+		}
 	}
 }

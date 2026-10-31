@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -193,5 +194,53 @@ func TestPrefilter(t *testing.T) {
 	}
 	if !LooksStats("скільки ми витратили цього місяця?") {
 		t.Fatal("stats intent not detected")
+	}
+}
+
+func TestRegexParserAmountFirstList(t *testing.T) {
+	p, _, cleanup := testParser(t)
+	defer cleanup()
+	text := strings.Join([]string{
+		"200 книга для Ані на подарунок",
+		"119 новорічна аплікація з помпонів для Паші",
+		"85 тест на вагітність",
+		"400 поклейка скла на телефон Саші",
+		"200 килимок-парковка доя Марка на Миколая",
+		"19 лист до Миколая для Паші",
+		"129 адмент календар Міленіум шоколад",
+		"50 білий офісний папір",
+	}, "\n")
+	intent, err := p.ParseRegex(context.Background(), text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantAmounts := []string{"200", "119", "85", "400", "200", "19", "129", "50"}
+	if len(intent.Transactions) != len(wantAmounts) {
+		t.Fatalf("expected %d transactions, got %+v", len(wantAmounts), intent.Transactions)
+	}
+	for i, want := range wantAmounts {
+		tx := intent.Transactions[i]
+		if tx.Amount != want || tx.Date != "2026-10-26" || tx.Currency != "UAH" {
+			t.Fatalf("transaction %d: got amount=%s date=%s currency=%s", i+1, tx.Amount, tx.Date, tx.Currency)
+		}
+	}
+	if got := intent.Transactions[0].Description; got != "книга для Ані на подарунок" {
+		t.Fatalf("first description = %q", got)
+	}
+	if got := intent.Transactions[2].Description; got != "тест на вагітність" {
+		t.Fatalf("third description = %q", got)
+	}
+}
+
+func TestPrefilterAmountList(t *testing.T) {
+	list := "200 книга для Ані на подарунок\n119 новорічна аплікація з помпонів для Паші"
+	if !LooksFinancial(list) {
+		t.Fatal("amount-first expense list not detected")
+	}
+	if LooksFinancial("2026 рік буде кращим") {
+		t.Fatal("a single line with a number was detected as an expense list")
+	}
+	if LooksFinancial("2026 рік буде кращим\nі 2027 теж") {
+		t.Fatal("a line without a leading amount was detected as an expense list")
 	}
 }

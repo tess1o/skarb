@@ -15,6 +15,11 @@ import (
 
 const llmSettingKey = "llm.config"
 
+// maxOutputTokensLimit bounds the configurable output cap. Reasoning models
+// count their reasoning tokens against this cap, and one output object is
+// produced per transaction, so a multi-line list can need several thousand.
+const maxOutputTokensLimit = 32000
+
 type LLMConfig struct {
 	BaseURL                string  `json:"base_url"`
 	Model                  string  `json:"model"`
@@ -82,8 +87,8 @@ func (s *Service) SetLLMConfig(ctx context.Context, actor domain.Actor, cfg LLMC
 	if cfg.TimeoutSeconds < 5 || cfg.TimeoutSeconds > 120 {
 		return validation("timeout_seconds", "timeout must be between 5 and 120 seconds")
 	}
-	if cfg.MaxOutputTokens < 100 || cfg.MaxOutputTokens > 4000 {
-		return validation("max_output_tokens", "output cap must be between 100 and 4000")
+	if cfg.MaxOutputTokens < 100 || cfg.MaxOutputTokens > maxOutputTokensLimit {
+		return validation("max_output_tokens", fmt.Sprintf("output cap must be between 100 and %d", maxOutputTokensLimit))
 	}
 	if cfg.MaxTransactions < 1 || cfg.MaxTransactions > 20 {
 		return validation("max_transactions", "max transactions must be between 1 and 20")

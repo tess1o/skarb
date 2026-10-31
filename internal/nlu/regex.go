@@ -11,12 +11,19 @@ import (
 	"skarb/internal/service"
 )
 
+const (
+	amountPattern   = `(\d{1,3}(?:[ ]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)`
+	currencyPattern = `(грн|₴|uah|usd|долар[а-яіїєґ']*|\$|eur|євро|€|pln|zł|gbp|£|chf)?`
+)
+
 var (
-	segmentSplitRE = regexp.MustCompile(`[,;\n\r]|\s+(?:та|і|and)\s+`)
-	decimalCommaRE = regexp.MustCompile(`(\d),(\d{1,2})\b`)
-	amountRE       = regexp.MustCompile(`(?i)(\d{1,3}(?:[ ]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)\s*(грн|₴|uah|usd|долар[а-яіїєґ']*|\$|eur|євро|€|pln|zł|gbp|£|chf)?`)
-	explicitDateRE = regexp.MustCompile(`\b\d{1,2}[./]\d{1,2}(?:[./]\d{2,4})?\b`)
-	relativeDateRE = regexp.MustCompile(`(?i)(\d+|один|одна|два|дві|три|чотири|п'ять|пять|шість|сім|вісім|дев'ять|десять|one|two|three|four|five|six|seven|eight|nine|ten)\s*(день|дні|днів|дня|доби|діб|day|days)\s*(тому|назад|ago)`)
+	segmentSplitRE  = regexp.MustCompile(`[,;\n\r]|\s+(?:та|і|and)\s+`)
+	decimalCommaRE  = regexp.MustCompile(`(\d),(\d{1,2})\b`)
+	amountRE        = regexp.MustCompile(`(?i)` + amountPattern + `\s*` + currencyPattern)
+	leadingAmountRE = regexp.MustCompile(`(?i)^\s*` + amountPattern + `\s*` + currencyPattern)
+	amountLineRE    = regexp.MustCompile(`(?i)^\s*` + amountPattern + `\s+\S`)
+	explicitDateRE  = regexp.MustCompile(`\b\d{1,2}[./]\d{1,2}(?:[./]\d{2,4})?\b`)
+	relativeDateRE  = regexp.MustCompile(`(?i)(\d+|один|одна|два|дві|три|чотири|п'ять|пять|шість|сім|вісім|дев'ять|десять|one|two|three|four|five|six|seven|eight|nine|ten)\s*(день|дні|днів|дня|доби|діб|day|days)\s*(тому|назад|ago)`)
 )
 
 var wordNumbers = map[string]int{
@@ -188,6 +195,15 @@ func currencyFromToken(token string) string {
 }
 
 func descriptionFromSegment(segment, fallback string) string {
+	// An amount-first line ("200 книга для Ані") is the shape of a pasted
+	// expense list; the text after the amount is the best description.
+	if loc := leadingAmountRE.FindStringIndex(segment); loc != nil {
+		desc := trimLeadingStopword(strings.TrimSpace(segment[loc[1]:]))
+		desc = strings.Trim(desc, " .,;:!?")
+		if desc != "" {
+			return desc
+		}
+	}
 	lower := strings.ToLower(segment)
 	for _, marker := range []string{" за ", " на ", " for "} {
 		if i := strings.Index(lower, marker); i >= 0 {
@@ -199,6 +215,18 @@ func descriptionFromSegment(segment, fallback string) string {
 		}
 	}
 	return fallback
+}
+
+// trimLeadingStopword drops a preposition left at the start of the text that
+// follows an amount ("512 грн за їжу" -> "їжу").
+func trimLeadingStopword(s string) string {
+	lower := strings.ToLower(s)
+	for _, prefix := range []string{"за ", "на ", "for "} {
+		if strings.HasPrefix(lower, prefix) {
+			return strings.TrimSpace(s[len(prefix):])
+		}
+	}
+	return s
 }
 
 func serviceDefaults() service.LLMConfig {

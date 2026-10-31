@@ -15,7 +15,7 @@
       <option value="prompt" {{if eq .LLM.SchemaMode "prompt"}}selected{{end}}>prompt only</option>
     </select></label>
     <label>Таймаут, с<input type="number" name="timeout_seconds" value="{{.LLM.TimeoutSeconds}}" min="5" max="120"></label>
-    <label>Макс. токенів<input type="number" name="max_output_tokens" value="{{.LLM.MaxOutputTokens}}" min="100" max="4000"></label>
+    <label>Макс. токенів<input type="number" name="max_output_tokens" value="{{.LLM.MaxOutputTokens}}" min="100" max="32000"></label>
     <label>Макс. транзакцій<input type="number" name="max_transactions" value="{{.LLM.MaxTransactions}}" min="1" max="20"></label>
     <label>Макс. символів<input type="number" name="max_input_chars" value="{{.LLM.MaxInputChars}}" min="100" max="10000"></label>
     <label>Температура<input name="temperature" value="{{.LLM.Temperature}}" inputmode="decimal"></label>

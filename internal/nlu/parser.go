@@ -337,6 +337,9 @@ func parseNLUDate(raw string, today domain.Date) (domain.Date, error) {
 }
 
 func LooksFinancial(text string) bool {
+	if looksLikeAmountList(text) {
+		return true
+	}
 	text = strings.ToLower(text)
 	if strings.ContainsAny(text, "0123456789") {
 		for _, token := range []string{"грн", "₴", "uah", "usd", "$", "долар", "eur", "євро", "€", "pln", "zł", "gbp", "£", "chf", "коштує", "витрат", "дохід", "отримав", "заплатив"} {
@@ -346,6 +349,28 @@ func LooksFinancial(text string) bool {
 		}
 	}
 	return LooksStats(text)
+}
+
+// looksLikeAmountList recognizes a pasted expense list where every line starts
+// with an amount and no currency marker is present, for example:
+//
+//	200 книга для Ані на подарунок
+//	119 новорічна аплікація
+//
+// Such lists are common in family chats, and the deterministic parser can
+// handle them, so they must not be filtered out as chatter.
+func looksLikeAmountList(text string) bool {
+	lines := 0
+	for _, line := range strings.Split(text, "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if !amountLineRE.MatchString(line) {
+			return false
+		}
+		lines++
+	}
+	return lines >= 2
 }
 
 func LooksStats(text string) bool {

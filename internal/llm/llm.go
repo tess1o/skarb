@@ -18,6 +18,18 @@ var (
 	ErrUnsupportedMode = errors.New("response format not supported")
 	ErrAuth            = errors.New("LLM authentication failed")
 	ErrUpstream        = errors.New("LLM upstream error")
+	ErrTruncated       = errors.New("LLM output was truncated")
+)
+
+const (
+	defaultMaxOutputTokens = 800
+	// A truncated completion usually means the configured output cap is too low
+	// for the request: a multi-line expense list needs one JSON object per line,
+	// and reasoning models spend completion tokens before writing any JSON.
+	// Retry with a larger cap instead of failing the whole message.
+	// Keep this in sync with the settings limit in internal/service.
+	maxOutputTokensCeiling = 32000
+	maxTruncationRetries   = 2
 )
 
 type Config struct {
@@ -43,7 +55,7 @@ func New(cfg Config) *Client {
 		cfg.SchemaMode = "auto"
 	}
 	if cfg.MaxOutputTokens <= 0 {
-		cfg.MaxOutputTokens = 800
+		cfg.MaxOutputTokens = defaultMaxOutputTokens
 	}
 	return &Client{cfg: cfg, http: &http.Client{Timeout: cfg.Timeout}}
 }
@@ -72,7 +84,7 @@ func (c *Client) ChatJSON(ctx context.Context, system, user string, schema json.
 	if mode == "auto" {
 		key := cacheKey(c.cfg)
 		if cached, ok := modeCache.Load(key); ok {
-			if res, err := c.call(ctx, system, user, schema, cached.(string)); err == nil {
+			if res, err := c.callWithBudget(ctx, system, user, schema, cached.(string)); err == nil {
 				return res, nil
 			} else if !errors.Is(err, ErrUnsupportedMode) {
 				return nil, err
@@ -83,7 +95,7 @@ func (c *Client) ChatJSON(ctx context.Context, system, user string, schema json.
 			if candidate == "json_schema" && len(schema) == 0 {
 				continue
 			}
-			res, err := c.call(ctx, system, user, schema, candidate)
+			res, err := c.callWithBudget(ctx, system, user, schema, candidate)
 			if err == nil {
 				modeCache.Store(key, candidate)
 				return res, nil
@@ -94,15 +106,39 @@ func (c *Client) ChatJSON(ctx context.Context, system, user string, schema json.
 		}
 		return nil, ErrUnsupportedMode
 	}
-	return c.call(ctx, system, user, schema, mode)
+	return c.callWithBudget(ctx, system, user, schema, mode)
 }
 
-func (c *Client) call(ctx context.Context, system, user string, schema json.RawMessage, mode string) (*Result, error) {
+// callWithBudget sends one request and raises the output cap when the model
+// stops because it ran out of tokens.
+func (c *Client) callWithBudget(ctx context.Context, system, user string, schema json.RawMessage, mode string) (*Result, error) {
+	maxTokens := c.cfg.MaxOutputTokens
+	ceiling := maxOutputTokensCeiling
+	if maxTokens > ceiling {
+		ceiling = maxTokens
+	}
+	for attempt := 0; ; attempt++ {
+		res, err := c.call(ctx, system, user, schema, mode, maxTokens)
+		if !errors.Is(err, ErrTruncated) || attempt >= maxTruncationRetries {
+			return res, err
+		}
+		next := maxTokens * 2
+		if next > ceiling {
+			next = ceiling
+		}
+		if next <= maxTokens {
+			return res, err
+		}
+		maxTokens = next
+	}
+}
+
+func (c *Client) call(ctx context.Context, system, user string, schema json.RawMessage, mode string, maxTokens int) (*Result, error) {
 	payload := map[string]any{
 		"model":       c.cfg.Model,
 		"messages":    []map[string]string{{"role": "system", "content": system}, {"role": "user", "content": user}},
 		"temperature": c.cfg.Temperature,
-		"max_tokens":  c.cfg.MaxOutputTokens,
+		"max_tokens":  maxTokens,
 	}
 	switch mode {
 	case "json_schema":
@@ -190,7 +226,7 @@ func (c *Client) call(ctx context.Context, system, user string, schema json.RawM
 		return nil, fmt.Errorf("LLM refused: %s", choice.Message.Refusal)
 	}
 	if choice.FinishReason == "length" {
-		return nil, fmt.Errorf("LLM output was truncated")
+		return nil, fmt.Errorf("%w: finish_reason=length at max_tokens=%d", ErrTruncated, maxTokens)
 	}
 	content := strings.TrimSpace(choice.Message.Content)
 	if content == "" {

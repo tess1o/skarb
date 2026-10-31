@@ -428,3 +428,37 @@ func TestManifestIsServedWithItsType(t *testing.T) {
 		t.Fatalf("manifest: %d %q", rec.Code, rec.Header().Get("Content-Type"))
 	}
 }
+
+func TestAdminCanRaiseMaxOutputTokens(t *testing.T) {
+	app := newTestApp(t)
+	post := func(tokens string) {
+		t.Helper()
+		rec := app.do(&app.admin, http.MethodPost, "/admin/settings/llm", url.Values{
+			"schema_mode":       {"auto"},
+			"timeout_seconds":   {"15"},
+			"max_output_tokens": {tokens},
+			"max_transactions":  {"10"},
+			"max_input_chars":   {"2000"},
+			"temperature":       {"0.1"},
+		})
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("status = %d, want 303", rec.Code)
+		}
+	}
+	post("16000")
+	cfg, err := app.svc.GetLLMConfig(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.MaxOutputTokens != 16000 {
+		t.Fatalf("max_output_tokens = %d, want 16000", cfg.MaxOutputTokens)
+	}
+	post("32001")
+	cfg, err = app.svc.GetLLMConfig(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.MaxOutputTokens != 16000 {
+		t.Fatalf("out-of-range cap was saved: %d", cfg.MaxOutputTokens)
+	}
+}
