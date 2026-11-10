@@ -95,6 +95,14 @@ the deterministic parser and do not call the LLM in the default mode. In the all
 mode, unrelated chatter is classified by the LLM but receives no bot reply. Set
 `SKARB_TELEGRAM_TOOL_MODE=false` to disable full tool mode.
 
+In private chats, stats replies (`/stats`, «статистика за жовтень», and the tool-mode
+`stats_summary` / `stats_category_breakdown` results) arrive as an HTML widget card
+(Bot API 10.4): income, expenses, balance, the share of income spent and bars for the
+top categories. Telegram currently allows widgets only in private chats, so groups keep
+the text reply, and the bot also falls back to text when `sendWidget` fails. Apps without
+widget support show the card's caption. Set `SKARB_TELEGRAM_WIDGETS=false` to always
+send text.
+
 The confirmation list has one row of buttons per transaction: `↩ Скасувати N`, `✏️ Коментар N` and `🏷 Категорія N`. Clicking **Коментар** sends a ForceReply prompt; reply with the new comment. Clicking **Категорія** turns the confirmation into a picker of active categories of the same kind (`← Назад` returns without changes). In both cases Skarb soft-deletes the old row and creates a linked replacement; **Undo** on the replacement restores the original.
 
 ## LLM parser

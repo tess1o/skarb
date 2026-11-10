@@ -30,6 +30,10 @@ type fakeTelegram struct {
 	answers  []map[string]any
 	sendOnce chan map[string]any
 	updates  []map[string]any
+	widgets  []map[string]any
+	// failWidget makes sendWidget return an API error, like a chat where
+	// widgets are not allowed.
+	failWidget bool
 }
 
 func (f *fakeTelegram) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -94,6 +98,28 @@ func (f *fakeTelegram) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"message_id": 77, "date": time.Now().Unix(),
 			"chat": map[string]any{"id": 123, "type": "private"},
 			"text": text,
+		}})
+	case "sendWidget":
+		_ = r.ParseMultipartForm(10 << 20)
+		body := map[string]any{
+			"chat_id": r.FormValue("chat_id"), "html": r.FormValue("html"),
+			"caption": r.FormValue("caption"), "parse_mode": r.FormValue("parse_mode"),
+		}
+		f.mu.Lock()
+		fail := f.failWidget
+		if !fail {
+			f.widgets = append(f.widgets, body)
+		}
+		f.mu.Unlock()
+		if fail {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"ok":false,"error_code":400,"description":"Bad Request: WIDGETS_FORBIDDEN"}`))
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "result": map[string]any{
+			"message_id": 78, "date": time.Now().Unix(),
+			"chat":   map[string]any{"id": 123, "type": "private"},
+			"widget": map[string]any{"html": body["html"]},
 		}})
 	case "answerCallbackQuery":
 		body := map[string]any{}

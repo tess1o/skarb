@@ -21,6 +21,7 @@ type Config struct {
 	AdminPassword        string
 	TelegramBotToken     string
 	TelegramToolMode     bool
+	TelegramWidgets      bool
 	LLMAPIKey            string
 	LogLevel             string
 	TrustedProxyCIDRs    []string
@@ -41,6 +42,7 @@ func Load() (Config, error) {
 		AdminPassword:       env("SKARB_ADMIN_PASSWORD", ""),
 		TelegramBotToken:    env("SKARB_TELEGRAM_BOT_TOKEN", ""),
 		TelegramToolMode:    envBool("SKARB_TELEGRAM_TOOL_MODE", true),
+		TelegramWidgets:     envBool("SKARB_TELEGRAM_WIDGETS", true),
 		LLMAPIKey:           env("SKARB_LLM_API_KEY", ""),
 		LogLevel:            strings.ToLower(env("SKARB_LOG_LEVEL", "info")),
 		MaxActiveUsers:      envInt("SKARB_MAX_ACTIVE_USERS", 2),
