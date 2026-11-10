@@ -299,6 +299,11 @@ func (b *Bot) sendToolResult(ctx context.Context, chatID int64, actor domain.Act
 	if needsPage {
 		return b.sendToolPage(ctx, chatID, actor, tool, args, res.Structured, render)
 	}
+	if card, ok := statsCardFromTool(tool, res.Structured); ok {
+		if text := render.text(0); len(text) <= 3800 {
+			return b.replyCard(ctx, chatID, card, text)
+		}
+	}
 	return b.sendChunked(ctx, chatID, render.text(0), render.markup(0, ""))
 }
 

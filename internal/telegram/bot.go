@@ -34,6 +34,7 @@ type Bot struct {
 	loc       *time.Location
 	username  string
 	toolMode  bool
+	widgets   bool
 }
 
 func New(svc *service.Service, cfg config.Config, logger *slog.Logger, toolServer *mcp.Server) (*Bot, error) {
@@ -53,6 +54,7 @@ func New(svc *service.Service, cfg config.Config, logger *slog.Logger, toolServe
 		mcpServer: toolServer,
 		loc:       svc.Loc,
 		toolMode:  cfg.TelegramToolMode,
+		widgets:   cfg.TelegramWidgets,
 	}
 	api, err := tgbot.New(cfg.TelegramBotToken,
 		tgbot.WithDefaultHandler(b.handleUpdate),

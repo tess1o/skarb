@@ -55,7 +55,7 @@ func (b *Bot) cmdStats(ctx context.Context, chatID int64, actor domain.Actor, ar
 		return b.reply(ctx, chatID, "Не вдалося порахувати: "+escape(err.Error()), nil)
 	}
 	cats, _ := b.svc.CategoryBreakdown(ctx, actor, store.TransactionFilter{From: &r.From, To: &r.To}, domain.KindExpense, 6)
-	return b.reply(ctx, chatID, formatSummary(sum)+"\n\n"+formatCategoryRows(cats, "Витрати за категоріями"), nil)
+	return b.replyStats(ctx, chatID, sum, cats)
 }
 
 func (b *Bot) cmdCompare(ctx context.Context, chatID int64, actor domain.Actor, args []string) error {
@@ -261,7 +261,7 @@ func (b *Bot) handleStatsIntent(ctx context.Context, chatID int64, actor domain.
 			return b.reply(ctx, chatID, "Не вдалося порахувати: "+escape(err.Error()), nil)
 		}
 		cats, _ := b.svc.CategoryBreakdown(ctx, actor, f, domain.KindExpense, 6)
-		return b.reply(ctx, chatID, formatSummary(sum)+"\n\n"+formatCategoryRows(cats, "Витрати за категоріями"), nil)
+		return b.replyStats(ctx, chatID, sum, cats)
 	}
 }
 
@@ -390,6 +390,19 @@ func helpText() string {
 
 Після запису кожна транзакція має кнопки «Скасувати», «Коментар» та «Категорія».
 Руйнівні дії бот спершу показує з кнопками підтвердження.`
+}
+
+// replyStats sends a summary with its top expense categories, as a widget
+// card in private chats and as text elsewhere.
+func (b *Bot) replyStats(ctx context.Context, chatID int64, sum *domain.Summary, cats []domain.CategoryTotal) error {
+	const catTitle = "Витрати за категоріями"
+	text := formatSummary(sum) + "\n\n" + formatCategoryRows(cats, catTitle)
+	card, err := buildStatsCard(statsCardFromSummary(sum, cats, catTitle))
+	if err != nil {
+		b.log.Warn("telegram stats widget not rendered", "error", err)
+		card = nil
+	}
+	return b.replyCard(ctx, chatID, card, text)
 }
 
 func formatSummary(s *domain.Summary) string {

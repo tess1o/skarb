@@ -1,0 +1,36 @@
+<!doctype html>
+<html><head><style>
+:root{--tx:var(--tg-theme-text-color,#111);--hint:var(--tg-theme-hint-color,#8a8a8e);--sec:var(--tg-theme-secondary-bg-color,#f1f1f4);--in:#2e9e5b;--out:#d9534f}
+@media (prefers-color-scheme:dark){:root{--tx:var(--tg-theme-text-color,#f2f2f2);--sec:var(--tg-theme-secondary-bg-color,#2a2a2e);--in:#4cc27a;--out:#ff6b63}}
+body{margin:0;font:14px/1.35 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;color:var(--tx)}
+.w{padding:12px 12px 8px}
+h1{font-size:16px;margin:0}
+.p{color:var(--hint);font-size:12px;margin:2px 0 10px}
+.t{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:6px}
+.c{background:var(--sec);border-radius:10px;padding:7px 9px}
+.l{font-size:11px;color:var(--hint)}
+.v{font-weight:600;font-size:14px}
+.in{color:var(--in)}.out{color:var(--out)}
+.s{margin-top:10px;font-size:12px;color:var(--hint)}
+.b{height:6px;border-radius:3px;background:var(--sec);overflow:hidden;margin-top:4px}
+.b i{display:block;height:100%;border-radius:3px;background:var(--out)}
+h2{font-size:13px;margin:12px 0 2px}
+.r{margin-top:7px}
+.h{display:flex;justify-content:space-between;gap:8px;font-size:13px}
+.h span:first-child{overflow:hidden;white-space:nowrap}
+.h span:last-child{white-space:nowrap;font-weight:600}
+.f{color:var(--hint);font-size:12px;margin-top:10px}
+</style></head><body><div class="w">
+<h1>{{.Title}}</h1>
+{{if .Period}}<div class="p">{{.Period}}</div>{{end}}
+{{if .HasTotals}}<div class="t">
+<div class="c"><div class="l">Доходи</div><div class="v in">+{{.Income}}</div></div>
+<div class="c"><div class="l">Витрати</div><div class="v out">−{{.Expense}}</div></div>
+<div class="c"><div class="l">Баланс</div><div class="v{{if .NetNegative}} out{{end}}">{{.Net}}</div></div>
+</div>
+{{if .SpentShare}}<div class="s">Витрачено {{.SpentShare}}% доходів<div class="b"><i style="{{.SpentStyle}}"></i></div></div>{{end}}{{end}}
+{{if .Categories}}<h2>{{.CategoriesTitle}}</h2>
+{{range .Categories}}<div class="r"><div class="h"><span>{{.Label}}</span><span>{{.Amount}} · {{.Percent}}%</span></div><div class="b"><i style="{{.Style}}"></i></div></div>
+{{end}}{{if .MoreCategories}}<div class="f">…і ще {{.MoreCategories}}</div>{{end}}{{end}}
+{{if .Footer}}<div class="f">{{.Footer}}</div>{{end}}
+</div></body></html>
